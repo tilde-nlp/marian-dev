@@ -13,6 +13,9 @@ Expr debug(Expr a, const std::string& message = "");
 Expr rows(Expr a, const std::vector<size_t>& indeces);
 Expr cols(Expr a, const std::vector<size_t>& indeces);
 
+Expr get(Expr a, const std::vector<size_t>& indeces);
+Expr put(Expr a, Expr b, const std::vector<size_t>& indeces);
+
 Expr plus(const std::vector<Expr>&);
 
 Expr logit(Expr a);

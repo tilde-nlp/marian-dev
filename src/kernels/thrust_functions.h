@@ -167,7 +167,7 @@ namespace thrust
                        make_actor(_1),
                        make_actor(_2));
       }
-      
+
       template<typename T>
       struct binary_prune : public thrust::binary_function<T, T, T> {
         __host__ __device__
@@ -189,6 +189,29 @@ namespace thrust
                        make_actor(_1),
                        make_actor(_2));
       }
+
+      template<typename T>
+      struct binary_finite : public thrust::binary_function<T, T, T> {
+        __host__ __device__
+        T operator()(const T &x, const T &good) const { return isfinite(x) ? x : good; }
+      };
+
+      template<typename T1, typename T2>
+      __host__ __device__
+      actor<
+        composite<
+          binary_operator<binary_finite>,
+          actor<T1>,
+          typename as_actor<T2>::type
+        >
+      >
+      Finite(const actor<T1> &_1, const T2 &_2)
+      {
+        return compose(binary_operator<binary_finite>(),
+                       make_actor(_1),
+                       make_actor(_2));
+      }
+
 
       template<typename T>
       struct binary_pow : public thrust::binary_function<T, T, T> {

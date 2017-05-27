@@ -269,9 +269,6 @@ class DecoderS2S : public DecoderBase {
         size_t kAll = indices.size();
         float kqw = kAll * 1.f / dimTrgVoc;
 
-        logitsOut = DenseWithFilter(prefix_ + "_ff_logit_l2", dimTrgVoc, truthPlusNoise)(logitsL1);
-        logitsOut = kqw / (exp(logitsOut) + kqw);
-
         std::map<size_t, size_t> indMap;
         size_t j = 0;
         for(auto i : indices)
@@ -279,16 +276,19 @@ class DecoderS2S : public DecoderBase {
 
         std::vector<size_t> truth;
         j = 0;
-        for(auto i : stateS2S->getTargetWords())
+        for(auto i : stateS2S->getTargetWords()) {
           truth.push_back(indMap[i] + kAll * j++);
+          //std::cerr << j << " : " << i << " " << indMap[i] << " " << truth.back() << std::endl;
+        }
 
-        //logitsOut = put(logitsOut, 1 - get(logitsOut, truth), truth);
+        auto logits = DenseWithFilter(prefix_ + "_ff_logit_l2", dimTrgVoc, truthPlusNoise)(logitsL1);
+        //debug(logits, "logits");
+        auto pwu = kqw / (exp(logits) + kqw);
+        //debug(pwu, "pwu");
+        logitsOut = log(put(pwu, 1 - get(pwu, truth), truth));
 
         /*****************************************************************************************/
 
-        debug(logitsOut, "logits1");
-        logitsOut = log(logitsOut);
-        debug(logitsOut, "logits2");
       }
       else {
         logitsOut = Dense(prefix_ + "_ff_logit_l2", dimTrgVoc)(logitsL1);

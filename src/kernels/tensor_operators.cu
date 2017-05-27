@@ -539,7 +539,7 @@ __global__ void gCopyCols(float* out, const float* in, size_t rows, size_t colsI
     if(j < rows) {
       const float* rowIn = in + j * colsIn;
       float* rowOut = out + j * colsOut;
-      
+
       for(int tid = 0; tid < colsOut; tid += blockDim.x) {
         int i = tid + threadIdx.x;
         if(i < colsOut)
@@ -577,7 +577,7 @@ __global__ void gPasteCols(float* out, const float* in, size_t rows, size_t cols
     if(j < rows) {
       const float* rowIn = in + j * colsIn;
       float* rowOut = out + j * colsOut;
-      
+
       for(int tid = 0; tid < colsIn; tid += blockDim.x) {
         int i = tid + threadIdx.x;
         if(i < colsIn)
@@ -607,6 +607,65 @@ void PasteCols(Tensor out, const Tensor in, const std::vector<size_t>& indeces) 
 
   CUDA_CHECK(cudaFree(d_indeces));
 }
+
+
+__global__ void gCopyElements(float* out, const float* in, size_t length,
+                              const size_t* elements) {
+  for(int bid = 0; bid < length; bid += blockDim.x * gridDim.x) {
+    int index = bid + blockDim.x * blockIdx.x + threadIdx.x;
+    if (index < length) {
+      out[index] = in[elements[index]];
+    }
+  }
+}
+
+void CopyElements(Tensor out, const Tensor in, const std::vector<size_t>& indices) {
+  cudaSetDevice(out->getDevice());
+
+  int length = out->shape().elements();
+
+  int threads = std::min(MAX_THREADS, length);
+  int blocks  = std::min(MAX_BLOCKS, length / threads  + (length % threads != 0));
+
+  size_t* d_indices;
+  CUDA_CHECK(cudaMalloc(&d_indices, length * sizeof(size_t)));
+  CUDA_CHECK(cudaMemcpy(d_indices, indices.data(), length * sizeof(size_t),
+                        cudaMemcpyHostToDevice));
+
+  gCopyElements<<<blocks, threads>>>(out->data(), in->data(), length, d_indices);
+
+  CUDA_CHECK(cudaFree(d_indices));
+}
+
+__global__ void gPasteElements(float* out, const float* in, size_t length,
+                               const size_t* elements) {
+  for(int bid = 0; bid < length; bid += blockDim.x * gridDim.x) {
+    int index = bid + blockDim.x * blockIdx.x + threadIdx.x;
+    if (index < length) {
+      out[elements[index]] = in[index];
+    }
+  }
+}
+
+void PasteElements(Tensor out, const Tensor in, const std::vector<size_t>& indices) {
+  cudaSetDevice(out->getDevice());
+
+  int length = in->shape().elements();
+
+  int threads = std::min(MAX_THREADS, length);
+  int blocks  = std::min(MAX_BLOCKS, length / threads  + (length % threads != 0));
+
+  size_t* d_indices;
+  CUDA_CHECK(cudaMalloc(&d_indices, length * sizeof(size_t)));
+  CUDA_CHECK(cudaMemcpy(d_indices, indices.data(), length * sizeof(size_t),
+                        cudaMemcpyHostToDevice));
+
+  gPasteElements<<<blocks, threads>>>(out->data(), in->data(), length, d_indices);
+
+  CUDA_CHECK(cudaFree(d_indices));
+}
+
+
 //////////////
 
 void Transpose(cublasHandle_t cublasHandle, Tensor out, const Tensor in) {
@@ -741,7 +800,7 @@ void Concatenate1(Tensor out, const std::vector<Tensor>& inputs) {
       inputs[2]->shape()[1]);
     return;
   }
-  
+
   size_t offset = 0;
   int cols_out = out->shape()[1];
 
@@ -1528,15 +1587,15 @@ __global__ void gShift(float* out, const float* in,
 }
 
 void Shift(Tensor out, Tensor in, Shape shift, bool invert) {
-  
+
   int offset = in->shape().stride(0) * shift[0]
              + in->shape().stride(1) * shift[1]
              + in->shape().stride(2) * shift[2]
              + in->shape().stride(3) * shift[3];
-             
+
   if(invert)
     offset = -offset;
-  
+
   cudaSetDevice(out->getDevice());
 
   int length = out->shape().elements();
@@ -1544,8 +1603,8 @@ void Shift(Tensor out, Tensor in, Shape shift, bool invert) {
   int threads = std::min(MAX_THREADS, length);
   int blocks  = std::min(MAX_BLOCKS, length / threads  + (length % threads != 0));
 
-  gShift<<<blocks, threads>>>(out->data(), in->data(), length, offset);              
-}  
+  gShift<<<blocks, threads>>>(out->data(), in->data(), length, offset);
+}
 
 __global__ void gSetSparse(float* out,
                            const size_t* indeces,
@@ -1562,7 +1621,7 @@ __global__ void gSetSparse(float* out,
 void SetSparse(float *out,
                const std::vector<size_t>& indeces,
                const std::vector<float>& values) {
-  
+
   int length = indeces.size();
 
   int threads = std::min(MAX_THREADS, length);
@@ -1572,14 +1631,14 @@ void SetSparse(float *out,
   CUDA_CHECK(cudaMalloc(&d_indeces, length * sizeof(size_t)));
   CUDA_CHECK(cudaMemcpy(d_indeces, indeces.data(), length * sizeof(size_t),
                         cudaMemcpyHostToDevice));
-  
+
   float* d_values;
   CUDA_CHECK(cudaMalloc(&d_values, length * sizeof(float)));
   CUDA_CHECK(cudaMemcpy(d_values, values.data(), length * sizeof(float),
                         cudaMemcpyHostToDevice));
-  
+
   gSetSparse<<<blocks, threads>>>(out, d_indeces, d_values, length);
-  
+
   cudaFree(d_indeces);
   cudaFree(d_values);
 

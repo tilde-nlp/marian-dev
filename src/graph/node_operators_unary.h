@@ -97,7 +97,7 @@ struct ScalarDivNodeOp : public UnaryNodeOp {
 
     NodeOps backwardOps() {
       return {
-        NodeOp(Add(-scalar_ / (_1 * _1), child(0)->grad(), adj_))
+        NodeOp(Add(Finite(-scalar_ / (_1 * _1), 0.f), child(0)->grad(), adj_))
       };
     }
 
@@ -696,6 +696,56 @@ struct ColsNodeOp : public UnaryNodeOp {
   std::vector<size_t> indeces_;
 };
 
+struct GetNodeOp : public UnaryNodeOp {
+  template <typename ...Args>
+  GetNodeOp(Expr a, const std::vector<size_t>& indeces, Args ...args)
+    : UnaryNodeOp(a, keywords::shape=newShape(indeces.size()), args...),
+      indeces_(indeces) {
+  }
+
+  NodeOps forwardOps() {
+    return {
+      NodeOp(CopyElements(val_,
+                          child(0)->val(),
+                          indeces_))
+    };
+  }
+
+  NodeOps backwardOps() {
+    return {
+      NodeOp(PasteElements(child(0)->grad(),
+                           adj_,
+                           indeces_))
+    };
+  }
+
+  template <class ...Args>
+  Shape newShape(size_t elements) {
+    Shape shape = {(int)elements};
+    return shape;
+  }
+
+  const std::string type() {
+    return "get";
+  }
+
+  const std::string color() {
+    return "orange";
+  }
+
+  virtual size_t hash() {
+    if(!hash_) {
+      size_t seed = NaryNodeOp::hash();
+      for(auto i : indeces_)
+        boost::hash_combine(seed, i);
+      hash_ = seed;
+    }
+    return hash_;
+  }
+
+
+  std::vector<size_t> indeces_;
+};
 
 struct TransposeNodeOp : public UnaryNodeOp {
   template <typename ...Args>

@@ -17,6 +17,14 @@ Expr cols(Expr a, const std::vector<size_t>& indeces) {
   return Expression<ColsNodeOp>(a, indeces);
 }
 
+Expr get(Expr a, const std::vector<size_t>& indeces) {
+  return Expression<GetNodeOp>(a, indeces);
+}
+
+Expr put(Expr a, Expr b, const std::vector<size_t>& indeces) {
+  return Expression<PutNodeOp>(a, b, indeces);
+}
+
 Expr logit(Expr a) {
   return Expression<LogitNodeOp>(a);
 }

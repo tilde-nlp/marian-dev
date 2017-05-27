@@ -8,6 +8,56 @@
 
 namespace marian {
 
+struct PutNodeOp : public NaryNodeOp {
+  template <typename ...Args>
+  PutNodeOp(Expr a, Expr b, const std::vector<size_t>& indeces, Args ...args)
+    : NaryNodeOp({a, b}, keywords::shape=a->shape(), args...),
+      indeces_(indeces) {
+  }
+
+  NodeOps forwardOps() {
+    return {
+      NodeOp(
+        Element(_1 = _2, val_, child(0)->val());
+        PasteElements(val_,
+                      child(1)->val(),
+                      indeces_)
+      )
+    };
+  }
+
+  NodeOps backwardOps() {
+    return {
+      NodeOp(Element(_1 = _2,
+                     child(0)->grad(), adj_)),
+      NodeOp(CopyElements(child(1)->grad(),
+                          adj_,
+                          indeces_))
+    };
+  }
+
+  const std::string type() {
+    return "put";
+  }
+
+  const std::string color() {
+    return "orange";
+  }
+
+  virtual size_t hash() {
+    if(!hash_) {
+      size_t seed = NaryNodeOp::hash();
+      for(auto i : indeces_)
+        boost::hash_combine(seed, i);
+      hash_ = seed;
+    }
+    return hash_;
+  }
+
+
+  std::vector<size_t> indeces_;
+};
+
 struct DotNodeOp : public NaryNodeOp {
   template <typename ...Args>
   DotNodeOp(Expr a, Expr b, Args ...args)
