@@ -65,32 +65,36 @@ Expr operator/(Expr a, Expr b) {
 
 /*********************************************************/
 
-Expr operator+(Expr a, float b) {
-  return Expression<ScalarAddNodeOp>(a, b);
+Expr operator+(Expr a, float s) {
+  return Expression<ScalarAddNodeOp>(a, s);
 }
 
-Expr operator+(float a, Expr b) {
-  return Expression<ScalarAddNodeOp>(b, a);
+Expr operator+(float s, Expr a) {
+  return Expression<ScalarAddNodeOp>(a, s);
 }
 
-Expr operator-(Expr a, float b) {
-  return Expression<ScalarAddNodeOp>(a, -b);
+Expr operator-(Expr a, float s) {
+  return Expression<ScalarAddNodeOp>(a, -s);
 }
 
-Expr operator-(float a, Expr b) {
-  return Expression<ScalarAddNodeOp>(-b, a);
+Expr operator-(float s, Expr a) {
+  return Expression<ScalarAddNodeOp>(-a, s);
 }
 
-Expr operator*(float a, Expr b) {
-  return Expression<ScalarMultNodeOp>(b, a);  
+Expr operator*(float s, Expr a) {
+  return Expression<ScalarMultNodeOp>(a, s);
 }
 
-Expr operator*(Expr a, float b) {
-  return Expression<ScalarMultNodeOp>(a, b);  
+Expr operator*(Expr a, float s) {
+  return Expression<ScalarMultNodeOp>(a, s);
 }
 
-Expr operator/(Expr a, float b) {
-  return Expression<ScalarMultNodeOp>(a, 1.f / b);  
+Expr operator/(Expr a, float s) {
+  return Expression<ScalarMultNodeOp>(a, 1.f / s);
+}
+
+Expr operator/(float s, Expr a) {
+  return Expression<ScalarDivNodeOp>(a, s);
 }
 
 /*********************************************************/

@@ -100,6 +100,7 @@ class DecoderBase {
       auto yShifted = shift(y, {0, 0, 1, 0});
 
       state->setTargetEmbeddings(yShifted);
+      state->setTargetWords(subBatch->indeces());
 
       return std::make_tuple(yMask, yIdx);
     }
@@ -287,10 +288,15 @@ class EncoderDecoder : public EncoderDecoderBase {
 
       auto nextState = step(graph, state);
 
-      auto cost = CrossEntropyCost(prefix_ + "cost")
+      if(options_->get<bool>("nce") && !inference_) {
+        auto cost = -mean(sum(sum(nextState->getProbs() * trgMask, axis=2), axis=1), axis=0);
+        return cost;
+      }
+      else {
+        auto cost = CrossEntropyCost(prefix_ + "cost")
                     (nextState->getProbs(), trgIdx, mask=trgMask);
-
-      return cost;
+        return cost;
+      }
     }
 
     Ptr<data::BatchStats> collectStats(Ptr<ExpressionGraph> graph) {

@@ -271,6 +271,10 @@ void Config::addOptionsTraining(po::options_description& desc) {
      "Decay factor for moving average")
     //("lexical-table", po::value<std::string>(),
     // "Load lexical table")
+    ("nce", po::value<bool>()->zero_tokens()->default_value(false),
+     "Use noise-constrastive estimation during training")
+    ("nce-samples", po::value<size_t>()->default_value(500),
+     "Use  arg  negative samples per batch with noise-constrastive estimation")
     ("guided-alignment", po::value<std::string>(),
      "Use guided alignment to guide attention")
     ("guided-alignment-cost", po::value<std::string>()->default_value("ce"),
@@ -454,6 +458,9 @@ void Config::addOptions(int argc, char** argv,
     SET_OPTION("moving-average", bool);
     SET_OPTION("moving-decay", double);
     //SET_OPTION_NONDEFAULT("lexical-table", std::string);
+
+    SET_OPTION("nce", bool);
+    SET_OPTION("nce-samples", size_t);
 
     SET_OPTION_NONDEFAULT("guided-alignment", std::string);
     SET_OPTION("guided-alignment-cost", std::string);

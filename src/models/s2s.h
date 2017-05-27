@@ -247,7 +247,52 @@ class DecoderS2S : public DecoderBase {
                             normalize=layerNorm)
                         (embeddings, outputLn, alignedContext);
 
-      auto logitsOut = Dense(prefix_ + "_ff_logit_l2", dimTrgVoc)(logitsL1);
+
+      Expr logitsOut;
+      if(options_->get<bool>("nce") && !inference_) {
+
+        size_t k = options_->get<size_t>("nce-samples");
+        std::set<size_t> indices(stateS2S->getTargetWords().begin(), stateS2S->getTargetWords().end());
+
+        std::set<size_t> noiseIndices;
+        while(noiseIndices.size() < k) {
+          size_t noise = rand() % dimTrgVoc;
+          if(!indices.count(noise)) {
+            indices.insert(noise);
+            noiseIndices.insert(noise);
+          }
+        }
+
+        std::vector<size_t> truthPlusNoise(indices.begin(), indices.end());
+        int dimTrgVocNew = truthPlusNoise.size();
+
+        size_t kAll = indices.size();
+        float kqw = kAll * 1.f / dimTrgVoc;
+
+        logitsOut = DenseWithFilter(prefix_ + "_ff_logit_l2", dimTrgVoc, truthPlusNoise)(logitsL1);
+        logitsOut = kqw / (exp(logitsOut) + kqw);
+
+        std::map<size_t, size_t> indMap;
+        size_t j = 0;
+        for(auto i : indices)
+          indMap[i] = j++;
+
+        std::vector<size_t> truth;
+        j = 0;
+        for(auto i : stateS2S->getTargetWords())
+          truth.push_back(indMap[i] + kAll * j++);
+
+        //logitsOut = put(logitsOut, 1 - get(logitsOut, truth), truth);
+
+        /*****************************************************************************************/
+
+        debug(logitsOut, "logits1");
+        logitsOut = log(logitsOut);
+        debug(logitsOut, "logits2");
+      }
+      else {
+        logitsOut = Dense(prefix_ + "_ff_logit_l2", dimTrgVoc)(logitsL1);
+      }
 
       return New<DecoderStateS2S>(statesOut, logitsOut,
                                   state->getEncoderState());

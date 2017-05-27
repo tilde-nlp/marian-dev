@@ -23,12 +23,12 @@ struct UnaryNodeOp : public NaryNodeOp {
 struct ScalarAddNodeOp : public UnaryNodeOp {
   private:
     float scalar_{0};
-  
-  public:     
+
+  public:
     template <typename ...Args>
     ScalarAddNodeOp(Expr a, float scalar, Args ...args)
     : UnaryNodeOp(a, args...), scalar_{scalar} {  }
-  
+
     NodeOps forwardOps() {
       return {
         NodeOp(Element(_1 = _2 + scalar_,
@@ -36,13 +36,13 @@ struct ScalarAddNodeOp : public UnaryNodeOp {
                        child(0)->val()))
       };
     }
-  
+
     NodeOps backwardOps() {
       return {
         NodeOp(Add(_1, child(0)->grad(), adj_))
       };
     }
-  
+
     const std::string type() {
       return "scalar_add";
       }
@@ -51,13 +51,13 @@ struct ScalarAddNodeOp : public UnaryNodeOp {
 struct ScalarMultNodeOp : public UnaryNodeOp {
   private:
     float scalar_{0};
-  
+
   public:
-    
+
     template <typename ...Args>
     ScalarMultNodeOp(Expr a, float scalar, Args ...args)
     : UnaryNodeOp(a, args...), scalar_{scalar} {  }
-  
+
     NodeOps forwardOps() {
       return {
         NodeOp(Element(_1 = scalar_ * _2,
@@ -65,18 +65,46 @@ struct ScalarMultNodeOp : public UnaryNodeOp {
                        child(0)->val()))
       };
     }
-  
+
     NodeOps backwardOps() {
       return {
         NodeOp(Add(scalar_ * _1, child(0)->grad(), adj_))
       };
     }
-  
+
     const std::string type() {
-      return "scalar_add";
+      return "scalar_mult";
     }
 };
 
+struct ScalarDivNodeOp : public UnaryNodeOp {
+  private:
+    float scalar_{1};
+
+  public:
+
+    template <typename ...Args>
+    ScalarDivNodeOp(Expr a, float scalar, Args ...args)
+    : UnaryNodeOp(a, args...), scalar_{scalar} {  }
+
+    NodeOps forwardOps() {
+      return {
+        NodeOp(Element(_1 = scalar_ / _2,
+                       val_,
+                       child(0)->val()))
+      };
+    }
+
+    NodeOps backwardOps() {
+      return {
+        NodeOp(Add(-scalar_ / (_1 * _1), child(0)->grad(), adj_))
+      };
+    }
+
+    const std::string type() {
+      return "scalar_div";
+    }
+};
 
 struct LogitNodeOp : public UnaryNodeOp {
   template <typename ...Args>
@@ -716,8 +744,8 @@ public:
     : UnaryNodeOp(a, keywords::shape=shape, args...),
       reshapee_(a) { }
 
-  
-    
+
+
   size_t allocate() { return 0; }
   void free() {}
 
@@ -887,12 +915,12 @@ struct LexicalProbNodeOp : public NaryNodeOp {
     Element(_1 = (Log(_1 + eps_) + _2),
             val_, child(0)->val());
   }
-  
+
   void backward() {
       Add(_1, child(0)->grad(), adj_);
       // adj' = adj / (p + eps) = adj / exp(val - x)
       Element(_1 = _1 / Exp(_2 - _3),
-              adj_, val_, child(0)->val()); 
+              adj_, val_, child(0)->val());
       sparse::LfaBackward(child(1)->grad(), adj_, lf_);
   }
 
