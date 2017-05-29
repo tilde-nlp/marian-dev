@@ -289,7 +289,7 @@ class EncoderDecoder : public EncoderDecoderBase {
       auto nextState = step(graph, state);
 
       if(options_->get<bool>("nce") && !inference_) {
-        auto cost = -mean(sum(sum(nextState->getProbs() * trgMask, axis=2), axis=1), axis=0);
+        auto cost = -mean(sum(sum(nextState->getProbs() * trgMask, axis=1), axis=2), axis=0);
         return cost;
       }
       else {

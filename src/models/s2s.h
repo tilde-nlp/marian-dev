@@ -254,9 +254,12 @@ class DecoderS2S : public DecoderBase {
         size_t k = options_->get<size_t>("nce-samples");
         std::set<size_t> indices(stateS2S->getTargetWords().begin(), stateS2S->getTargetWords().end());
 
+        std::default_random_engine generator;
+        std::uniform_real_distribution<double> distribution(0, logf(dimTrgVoc));
+
         std::set<size_t> noiseIndices;
         while(noiseIndices.size() < k) {
-          size_t noise = rand() % dimTrgVoc;
+          size_t noise = expf(distribution(generator)) - 1;
           if(!indices.count(noise)) {
             indices.insert(noise);
             noiseIndices.insert(noise);
@@ -267,7 +270,9 @@ class DecoderS2S : public DecoderBase {
         int dimTrgVocNew = truthPlusNoise.size();
 
         size_t kAll = indices.size();
-        float kqw = kAll * 1.f / dimTrgVoc;
+        std::vector<float> vKqw;
+        for(auto i : truthPlusNoise)
+          vKqw.push_back((kAll-1) * (logf(i + 2) - logf(i + 1)) / logf(dimTrgVoc));
 
         std::map<size_t, size_t> indMap;
         size_t j = 0;
@@ -281,11 +286,13 @@ class DecoderS2S : public DecoderBase {
           //std::cerr << j << " : " << i << " " << indMap[i] << " " << truth.back() << std::endl;
         }
 
+        auto kqw = graph->constant(shape={1, dimTrgVocNew}, init=inits::from_vector(vKqw));
         auto logits = DenseWithFilter(prefix_ + "_ff_logit_l2", dimTrgVoc, truthPlusNoise)(logitsL1);
-        //debug(logits, "logits");
+        debug(logits, "logits");
         auto pwu = kqw / (exp(logits) + kqw);
-        //debug(pwu, "pwu");
+        debug(pwu, "pwu");
         logitsOut = log(put(pwu, 1 - get(pwu, truth), truth));
+        debug(logitsOut, "logitsOut");
 
         /*****************************************************************************************/
 

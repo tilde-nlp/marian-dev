@@ -89,7 +89,7 @@ struct ScalarDivNodeOp : public UnaryNodeOp {
 
     NodeOps forwardOps() {
       return {
-        NodeOp(Element(_1 = scalar_ / _2,
+        NodeOp(Element(_1 = Finite(scalar_ / _2, 0),
                        val_,
                        child(0)->val()))
       };
@@ -97,7 +97,7 @@ struct ScalarDivNodeOp : public UnaryNodeOp {
 
     NodeOps backwardOps() {
       return {
-        NodeOp(Add(Finite(-scalar_ / (_1 * _1), 0.f), child(0)->grad(), adj_))
+        NodeOp(Add(Finite(-scalar_ * _1 / (_2 * _2), 0), child(0)->grad(), adj_, val_))
       };
     }
 
