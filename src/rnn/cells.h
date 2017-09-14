@@ -264,6 +264,167 @@ public:
 
 /******************************************************************************/
 
+Expr sruOps(const std::vector<Expr>& nodes, bool final = false);
+
+class SRU : public Cell {
+protected:
+  std::string prefix_;
+
+  //Layer normalization
+  Expr gamma1_;
+  Expr gamma2_;
+  Expr gamma3_;
+  Expr gamma4_;
+  Expr gamma5_;
+
+  //Expressions
+  Expr Wf, bf, Wr, br, W;
+
+  bool final_;
+  bool layerNorm_;
+  float dropout_;
+
+  Expr dropMaskX_;
+  Expr dropMaskS_;
+
+  Expr fakeInput_;
+
+public:
+  SRU(Ptr<ExpressionGraph> graph,
+      Ptr<Options> options)
+      : Cell(options) {
+
+    int dimInput = opt<int>("dimInput");
+    int dimState = opt<int>("dimState");
+    std::string prefix = opt<std::string>("prefix");
+
+    layerNorm_ = opt<bool>("layer-normalization", false);
+    dropout_ = opt<float>("dropout", 0);
+    final_ = opt<bool>("final", false);
+
+    Wf = graph->param(prefix + "_Wf",
+                          {dimInput, dimState},
+                          keywords::init = inits::glorot_uniform);
+
+    bf = graph->param(
+        prefix + "_bf", {1, dimState}, keywords::init = inits::zeros);
+
+    //@TODO those are the same shape. Should we concatinate or distribute to multiple GPUs
+    Wr = graph->param(prefix + "_Wr",
+                          {dimInput, dimState},
+                          keywords::init = inits::glorot_uniform);
+
+    br = graph->param(
+        prefix + "_br", {1, dimState}, keywords::init = inits::zeros);
+
+    //NO bias here? We could add one
+    W = graph->param(prefix + "_W",
+                          {dimInput, dimState},
+                          keywords::init = inits::glorot_uniform);
+
+
+    //if(dimInput > 0) { //@TODO ask
+    //  
+    //}
+
+    if(dropout_ > 0.0f) {
+      if(dimInput)
+        dropMaskX_ = graph->dropout(dropout_, {1, dimInput});
+      dropMaskS_ = graph->dropout(dropout_, {1, dimState});
+    }
+
+    if(layerNorm_) {
+      if(dimInput)
+        gamma1_ = graph->param(prefix + "_gamma1",
+                               {1, dimState},
+                               keywords::init = inits::from_value(1.f));
+      gamma2_ = graph->param(prefix + "_gamma2",
+                             {1, dimState},
+                             keywords::init = inits::from_value(1.f));
+      gamma3_ = graph->param(prefix + "_gamma3",
+                               {1, dimState},
+                               keywords::init = inits::from_value(1.f));
+      gamma4_ = graph->param(prefix + "_gamma4",
+                             {1, dimState},
+                             keywords::init = inits::from_value(1.f));
+      gamma5_ = graph->param(prefix + "_gamma5",
+                             {1, dimState},
+                             keywords::init = inits::from_value(1.f));
+    }
+  }
+
+  virtual State apply(std::vector<Expr> inputs,
+                      State state,
+                      Expr mask = nullptr) {
+    return applyState(applyInput(inputs), state, mask);
+  }
+
+  virtual std::vector<Expr> applyInput(std::vector<Expr> inputs) {
+    Expr input;
+    if(inputs.size() == 0)
+      return {};
+    else if(inputs.size() > 1)
+      input = concatenate(inputs, keywords::axis = 1);
+    else
+      input = inputs[0];
+
+    if(dropMaskX_)
+      input = dropout(input, keywords::mask = dropMaskX_);
+
+    auto xW = input*W;
+    auto Ft = input*Wf + bf; //@TODO SIGM
+    auto Rt = input*Wr + br; //@TODO SIGM
+
+    if(layerNorm_) {
+      xW = layer_norm(xW, gamma1_);
+      Ft = layer_norm(Ft, gamma2_);
+      Rt = layer_norm(Rt, gamma3_);
+    }
+    return {xW, Ft, Rt};
+  }
+
+  virtual State applyState(std::vector<Expr> xWFtRt,
+                           State state,
+                           Expr mask = nullptr) {
+
+    auto stateOrig = state.output;
+    auto stateDropped = stateOrig;
+    if(dropMaskS_)
+      stateDropped = dropout(stateOrig, keywords::mask = dropMaskS_);
+
+    Expr xW, Ft, Rt;
+    xW = xWFtRt[0];
+    Ft = xWFtRt[1];
+    Rt = xWFtRt[2];
+
+    auto Ct = dot(stateDropped, Ft) + dot((1 - Ft), xW); //Those are for the full input we need to get them for one element only
+    auto ht = dot(Ct, Rt) + dot((1 - Rt), xW); //@TODO xW here is actually just X the input, How to get it? Ct is g(Ct) What is g?
+
+
+    if(layerNorm_) {
+      Ct = layer_norm(Ct, gamma4_);
+      ht = layer_norm(ht, gamma5_);
+    }
+
+    /*@TODO why the fake input?
+    if(xWFtRt.empty()) {
+      if(!fakeInput_ || fakeInput_->shape() != sU->shape())
+        fakeInput_ = sU->graph()->constant(sU->shape(), keywords::init=inits::zeros);
+      xW = fakeInput_;
+    }
+    else {
+      xW = xWs.front();
+    }*/
+    Expr output;
+    //auto output = mask ? gruOps({stateOrig, xW, sU, b_, mask}, final_) : //@TODO
+    //                     gruOps({stateOrig, xW, sU, b_}, final_); //@ASK Why kernel is it just because it's faster?
+
+    return { output, state.cell }; // no cell state, hence copy
+  }
+};
+
+/******************************************************************************/
+
 Expr lstmOpsC(const std::vector<Expr>& nodes);
 Expr lstmOpsO(const std::vector<Expr>& nodes);
 
