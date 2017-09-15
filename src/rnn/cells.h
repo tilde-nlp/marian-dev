@@ -275,10 +275,9 @@ protected:
   Expr gamma2_;
   Expr gamma3_;
   Expr gamma4_;
-  Expr gamma5_;
 
   //Expressions
-  Expr Wf, bf, Wr, br, W;
+  Expr Wf, bf, Wr, br, W, Wi;
 
   bool final_;
   bool layerNorm_;
@@ -322,20 +321,18 @@ public:
                           {dimInput, dimState},
                           keywords::init = inits::glorot_uniform);
 
+    Wi = graph->param(prefix + "_Wi",
+                          {dimInput, dimState},
+                          keywords::init = inits::glorot_uniform);
 
-    //if(dimInput > 0) { //@TODO ask
-    //  
-    //}
 
     if(dropout_ > 0.0f) {
-      if(dimInput)
-        dropMaskX_ = graph->dropout(dropout_, {1, dimInput});
+      dropMaskX_ = graph->dropout(dropout_, {1, dimInput});
       dropMaskS_ = graph->dropout(dropout_, {1, dimState});
     }
 
     if(layerNorm_) {
-      if(dimInput)
-        gamma1_ = graph->param(prefix + "_gamma1",
+      gamma1_ = graph->param(prefix + "_gamma1",
                                {1, dimState},
                                keywords::init = inits::from_value(1.f));
       gamma2_ = graph->param(prefix + "_gamma2",
@@ -345,11 +342,8 @@ public:
                                {1, dimState},
                                keywords::init = inits::from_value(1.f));
       gamma4_ = graph->param(prefix + "_gamma4",
-                             {1, dimState},
-                             keywords::init = inits::from_value(1.f));
-      gamma5_ = graph->param(prefix + "_gamma5",
-                             {1, dimState},
-                             keywords::init = inits::from_value(1.f));
+                               {1, dimState},
+                               keywords::init = inits::from_value(1.f));
     }
   }
 
@@ -371,76 +365,38 @@ public:
     if(dropMaskX_)
       input = dropout(input, keywords::mask = dropMaskX_);
 
-    std::cout << "input_shape " << input->shape() << std::endl;
-    std::cout << "W_shape " << W->shape() << std::endl;
-    //std::cout << "OP0" << std::endl;
-    auto xW = dot(input,W);
-    //std::cout << "xW_shape " << xW->shape() << std::endl;
-    //std::cout << "OP1" << std::endl;
+    auto xW = dot(input, W);
     auto Ft = logit(affine(input, Wf, bf));
-    //std::cout << "OP2" << std::endl;
     auto Rt = logit(affine(input, Wr, br));
-    //std::cout << "OP3" << std::endl;
+    auto xWi = dot(input, Wi);
 
     if(layerNorm_) {
       xW = layer_norm(xW, gamma1_);
       Ft = layer_norm(Ft, gamma2_);
       Rt = layer_norm(Rt, gamma3_);
+      xWi = layer_norm(xWi, gamma4_);
     }
-    return {xW, Ft, Rt, input};
+
+    return {xW, Ft, Rt, xWi};
   }
 
   virtual State applyState(std::vector<Expr> xWFtRt,
                            State state,
                            Expr mask = nullptr) {
 
-    auto stateOrig = state.output;
-    auto stateDropped = stateOrig;
-    if(dropMaskS_)
-      stateDropped = dropout(stateOrig, keywords::mask = dropMaskS_);
-
-    Expr xW, Ft, Rt, x;
+    Expr xW, Ft, Rt, xWi;
     xW = xWFtRt[0];
     Ft = xWFtRt[1];
     Rt = xWFtRt[2];
-    x = xWFtRt[3];
+    xWi = xWFtRt[3];
 
-    auto Ct = Ft*stateDropped + (1 - Ft)*xW;
-    //std::cout << "OP4" << std::endl;
-    //auto Ht = Rt*tanh(Ct) + (1 - Rt)*x;
-    auto tanhCT = tanh(Ct);
-    //std::cout << "OP4.1" << std::endl;
-    auto RTTANH = Rt*tanhCT;
-    //std::cout << "OP4.2" << std::endl;
-    auto Rt_1 = 1 - Rt;
-    //std::cout << "OP4.3" << std::endl;
-    //std::cout << "RT1_SHAPE: " << Rt_1->shape() << " x " << x->shape() << std::endl;
-    auto xRT_1 = Rt_1*x;
-    //std::cout << "OP4.4" << std::endl;
-    //std::cout << "RTANH_SHAPE: " << RTTANH->shape() << " xRT_1_shape " << xRT_1->shape() << std::endl;
-    auto Ht = RTTANH + xRT_1;
-    //std::cout << "OP5" << std::endl;
+    auto Ct = Ft * state.cell + (1 - Ft) * xW;
+    auto mCt = mask ? mask * Ct : Ct;
 
+    auto Ht = Rt * tanh(mCt) + (1 - Rt) * xWi;
+    auto mHt = mask ? mask * Ht : Ht;
 
-    if(layerNorm_) {
-      Ct = layer_norm(Ct, gamma4_);
-      Ht = layer_norm(Ht, gamma5_);
-    }
-
-    /*@TODO why the fake input?
-    if(xWFtRt.empty()) {
-      if(!fakeInput_ || fakeInput_->shape() != sU->shape())
-        fakeInput_ = sU->graph()->constant(sU->shape(), keywords::init=inits::zeros);
-      xW = fakeInput_;
-    }
-    else {
-      xW = xWs.front();
-    }*/
-    //Expr output;
-    //auto output = mask ? gruOps({stateOrig, xW, sU, b_, mask}, final_) : //@TODO
-    //                     gruOps({stateOrig, xW, sU, b_}, final_); //@ASK Why kernel is it just because it's faster?
-
-    return { Ht, Ct };
+    return { mHt, mCt };
   }
 };
 
