@@ -264,7 +264,7 @@ public:
 
 /******************************************************************************/
 
-Expr sruOps(const std::vector<Expr>& nodes, bool final = false);
+//Expr sruOps(const std::vector<Expr>& nodes, bool final = false);
 
 class SRU : public Cell {
 protected:
@@ -371,16 +371,23 @@ public:
     if(dropMaskX_)
       input = dropout(input, keywords::mask = dropMaskX_);
 
-    auto xW = input*W;
-    auto Ft = input*Wf + bf; //@TODO SIGM
-    auto Rt = input*Wr + br; //@TODO SIGM
+    std::cout << "input_shape " << input->shape() << std::endl;
+    std::cout << "W_shape " << W->shape() << std::endl;
+    //std::cout << "OP0" << std::endl;
+    auto xW = dot(input,W);
+    //std::cout << "xW_shape " << xW->shape() << std::endl;
+    //std::cout << "OP1" << std::endl;
+    auto Ft = logit(affine(input, Wf, bf));
+    //std::cout << "OP2" << std::endl;
+    auto Rt = logit(affine(input, Wr, br));
+    //std::cout << "OP3" << std::endl;
 
     if(layerNorm_) {
       xW = layer_norm(xW, gamma1_);
       Ft = layer_norm(Ft, gamma2_);
       Rt = layer_norm(Rt, gamma3_);
     }
-    return {xW, Ft, Rt};
+    return {xW, Ft, Rt, input};
   }
 
   virtual State applyState(std::vector<Expr> xWFtRt,
@@ -392,18 +399,32 @@ public:
     if(dropMaskS_)
       stateDropped = dropout(stateOrig, keywords::mask = dropMaskS_);
 
-    Expr xW, Ft, Rt;
+    Expr xW, Ft, Rt, x;
     xW = xWFtRt[0];
     Ft = xWFtRt[1];
     Rt = xWFtRt[2];
+    x = xWFtRt[3];
 
-    auto Ct = dot(stateDropped, Ft) + dot((1 - Ft), xW); //Those are for the full input we need to get them for one element only
-    auto ht = dot(Ct, Rt) + dot((1 - Rt), xW); //@TODO xW here is actually just X the input, How to get it? Ct is g(Ct) What is g?
+    auto Ct = Ft*stateDropped + (1 - Ft)*xW;
+    //std::cout << "OP4" << std::endl;
+    //auto Ht = Rt*tanh(Ct) + (1 - Rt)*x;
+    auto tanhCT = tanh(Ct);
+    //std::cout << "OP4.1" << std::endl;
+    auto RTTANH = Rt*tanhCT;
+    //std::cout << "OP4.2" << std::endl;
+    auto Rt_1 = 1 - Rt;
+    //std::cout << "OP4.3" << std::endl;
+    //std::cout << "RT1_SHAPE: " << Rt_1->shape() << " x " << x->shape() << std::endl;
+    auto xRT_1 = Rt_1*x;
+    //std::cout << "OP4.4" << std::endl;
+    //std::cout << "RTANH_SHAPE: " << RTTANH->shape() << " xRT_1_shape " << xRT_1->shape() << std::endl;
+    auto Ht = RTTANH + xRT_1;
+    //std::cout << "OP5" << std::endl;
 
 
     if(layerNorm_) {
       Ct = layer_norm(Ct, gamma4_);
-      ht = layer_norm(ht, gamma5_);
+      Ht = layer_norm(Ht, gamma5_);
     }
 
     /*@TODO why the fake input?
@@ -415,11 +436,11 @@ public:
     else {
       xW = xWs.front();
     }*/
-    Expr output;
+    //Expr output;
     //auto output = mask ? gruOps({stateOrig, xW, sU, b_, mask}, final_) : //@TODO
     //                     gruOps({stateOrig, xW, sU, b_}, final_); //@ASK Why kernel is it just because it's faster?
 
-    return { output, state.cell }; // no cell state, hence copy
+    return { Ht, Ct };
   }
 };
 

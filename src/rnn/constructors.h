@@ -58,6 +58,10 @@ public:
       auto cell = New<Tanh>(graph_, options_);
       cell->setLazyInputs(inputs_);
       return cell;
+    } else if(type == "sru") {
+      auto cell = New<SRU>(graph_, options_);
+      cell->setLazyInputs(inputs_);
+      return cell;
     } else {
       UTIL_THROW2("Unknown RNN cell type");
     }

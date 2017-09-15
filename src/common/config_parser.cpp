@@ -243,13 +243,13 @@ void ConfigParser::addOptionsModel(po::options_description& desc) {
     ("enc-type", po::value<std::string>()->default_value("bidirectional"),
      "Type of encoder RNN : bidirectional, bi-unidirectional, alternating (s2s)")
     ("enc-cell", po::value<std::string>()->default_value("gru"),
-     "Type of RNN cell: gru, lstm, tanh (s2s)")
+     "Type of RNN cell: gru, lstm, tanh (s2s), sru (s2s)")
     ("enc-cell-depth", po::value<int>()->default_value(1),
      "Number of tansitional cells in encoder layers (s2s)")
     ("enc-depth", po::value<int>()->default_value(1),
      "Number of encoder layers (s2s)")
     ("dec-cell", po::value<std::string>()->default_value("gru"),
-     "Type of RNN cell: gru, lstm, tanh (s2s)")
+     "Type of RNN cell: gru, lstm, tanh (s2s), sru (s2s)")
     ("dec-cell-base-depth", po::value<int>()->default_value(2),
      "Number of tansitional cells in first decoder layer (s2s)")
     ("dec-cell-high-depth", po::value<int>()->default_value(1),
