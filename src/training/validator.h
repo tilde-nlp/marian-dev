@@ -188,7 +188,6 @@ protected:
 
 class TranslationValidator : public Validator<data::Corpus> {
 public:
-  template <class... Args>
   TranslationValidator(std::vector<Ptr<Vocab>> vocabs, Ptr<Config> options)
       : Validator(vocabs, options, false) {
     Ptr<Options> opts = New<Options>();
