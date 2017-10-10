@@ -56,30 +56,43 @@ public:
   /** @brief Constructs a new expression graph
    *
    * Constructor should be used as New<ExpressionGraph>()
+   *
+   * @param inference Enables an inference only mode
    */
   ExpressionGraph(bool inference = false);
-
-  void setInference(bool inference) { inferenceOnly_ = inference; }
 
   ~ExpressionGraph() {
     clear();
     params_->clear();
   }
 
+  /**
+   * @brief Enables or disables an inference only mode
+   */
+  void setInference(bool inference) { inferenceOnly_ = inference; }
+
   void setDevice(size_t device = 0);
   size_t getDevice() { return device_; }
 
   Ptr<Backend> getBackend() { return backend_; }
-
-  void switchParams(const std::string& newNamespace) {
-    namespace_ = newNamespace;
-  }
 
   void reserveWorkspaceMB(size_t num) {
     size_t bytes = num * 1024 * 1024 - 1;
     tensors_->reserve(bytes);
   }
 
+  /**
+   * @brief Switch into a new namespace for parameters.
+   *
+   * This is used with ensemble models.
+   */
+  void switchParams(const std::string& newNamespace) {
+    namespace_ = newNamespace;
+  }
+
+  /**
+   * @brief Copies parameters from another graph.
+   */
   void copyParams(Ptr<ExpressionGraph> graph) {
     for(auto p : *graph->params())
       param(p->name(), p->shape());
@@ -89,18 +102,6 @@ public:
 
   void reuseWorkspace(Ptr<ExpressionGraph> graph) {
     tensors_ = graph->tensors_;
-  }
-
-  /**
-   * @brief Performs backpropogation on this expression graph.
-   *
-   * Backpropogation is implemented by performing first the forward pass and
-   * then the backward pass of algorithmic differentiation (AD) on the nodes of
-   * the graph.
-   */
-  void backprop() {
-    forward();
-    backward();
   }
 
   bool fits() {
@@ -116,8 +117,20 @@ public:
   }
 
   /**
-   * @brief Perform the forward pass of algorithmic differentiation (AD) on this
-   * graph.
+   * @brief Performs backpropogation on this expression graph.
+   *
+   * Backpropogation is implemented by performing first the forward pass and
+   * then the backward pass of algorithmic differentiation (AD) on the nodes of
+   * the graph.
+   */
+  void backprop() {
+    forward();
+    backward();
+  }
+
+  /**
+   * @brief Performs the forward pass of algorithmic differentiation (AD) on
+   * this graph.
    *
    * This pass traverses the nodes of this graph in the order they were
    * created; as each node is traversed, its <code>allocate()</code> method is
@@ -135,8 +148,6 @@ public:
     params_->allocateForward();
     forwardNext();
   }
-
-  void checkNan(Tensor t);
 
   void forwardNext() {
     // @TODO: check if allocation works properly
@@ -162,20 +173,20 @@ public:
   }
 
   /**
-   * @brief Perform the backward pass of algorithmic differentiation (AD) on
+   * @brief Performs the backward pass of algorithmic differentiation (AD) on
    * this graph.
    *
    * This pass traverses the nodes of this graph in reverse of the order they
    * were created;
-   *    as each node is traversed, its <code>set_zero_adjoint()</code> method is
+   * as each node is traversed, its <code>set_zero_adjoint()</code> method is
    * called.
    *
    * Once this has been performed for all nodes, this pass again traverses the
    * nodes, again in reverse creation order;
-   *    as each node is traversed, its <code>backward()</code> method is called.
+   * as each node is traversed, its <code>backward()</code> method is called.
    *
-   * After this method has successfully completed,
-   *    and that all backward pass computations have been performed.
+   * After this method has successfully completed, and that all backward pass
+   * computations have been performed.
    */
   void backward() {
     UTIL_THROW_IF2(topNodes_.size() > 1,
@@ -212,6 +223,8 @@ public:
       v->children().clear();
     }
   }
+
+  void checkNan(Tensor t);
 
   /**
    * @brief Returns a string representing this expression graph in
