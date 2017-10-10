@@ -57,7 +57,10 @@ set_target_properties(marian_translate PROPERTIES OUTPUT_NAME s2s)
 cuda_add_executable(marian_rescore command/s2s_rescorer.cpp)
 set_target_properties(marian_rescore PROPERTIES OUTPUT_NAME rescorer)
 
-set(EXECUTABLES ${EXECUTABLES} marian_train marian_translate marian_rescore)
+cuda_add_executable(marian_multi_domain command/marian_multi_domain.cpp)
+set_target_properties(marian_multi_domain PROPERTIES OUTPUT_NAME marian-multi-domain)
+
+set(EXECUTABLES ${EXECUTABLES} marian_train marian_translate marian_rescore marian_multi_domain)
 
 if(COMPILE_SERVER)
   add_executable(marian_server command/s2s_server.cpp)
