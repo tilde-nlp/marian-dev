@@ -15,55 +15,41 @@ using namespace data;
 class TrainMultiDomain : public ModelTask {
 private:
   Ptr<Config> options_;
+
   std::vector<Ptr<Vocab>> vocabs_;
+  std::vector<Ptr<Scorer>> scorers_;
 
   Ptr<models::ModelBase> builder_;
   Ptr<models::ModelBase> builderTrans_;
   Ptr<ExpressionGraph> graph_;
   Ptr<ExpressionGraph> graphTemp_;
-  Ptr<OptimizerBase> opt_;
+
+  Ptr<OptimizerBase> optimizer_;
 
   float train(Ptr<data::Batch> batch) {
-    batch->debug();
-
-    LOG(info)->info("Getting cost node...");
     auto costNode = builder_->build(graphTemp_, batch);
     graphTemp_->forward();
-
-    LOG(info)->info("Getting cost...");
     float cost = costNode->scalar();
-
-    LOG(info)->info("Cost: {}", cost);
-
     graphTemp_->backward();
-    opt_->update(graphTemp_);
+
+    optimizer_->update(graphTemp_);
 
     return cost;
   }
 
   void translate(Ptr<data::CorpusBatch> batch) {
-    // Create scorer
-    auto model = options_->get<std::string>("model");
-    Ptr<Scorer> scorer = New<ScorerWrapper>(builderTrans_, "", 1.0f, model);
-    std::vector<Ptr<Scorer>> scorers = { scorer };
-
-    LOG(valid)->info("Translating...");
-
     graphTemp_->setInference(true);
-    boost::timer::cpu_timer timer;
-
     {
       auto collector = New<OutputCollector>();
       size_t sentenceId = 0;
 
       graphTemp_->clear();
-      auto search = New<BeamSearch>(options_, scorers);
+      auto search = New<BeamSearch>(options_, scorers_);
       auto history = search->search(graphTemp_, batch, sentenceId);
 
       std::stringstream best1;
       std::stringstream bestn;
       Printer(options_, vocabs_.back(), history, best1, bestn);
-      std::cerr << ">> " << best1.str() << std::endl;
 
       collector->Write(history->GetLineNum(),
                        best1.str(),
@@ -72,8 +58,6 @@ private:
 
       ++sentenceId;
     }
-
-    LOG(valid)->info("Total translation time: {}", timer.format(5, "%ws"));
     graphTemp_->setInference(false);
   }
 
@@ -84,14 +68,17 @@ public:
     graph_ = New<ExpressionGraph>();
     graph_->setDevice(device);
     graph_->reserveWorkspaceMB(options_->get<size_t>("workspace"));
-    opt_ = Optimizer(options_);
-
     builder_ = models::from_config(options_);
+
+    optimizer_ = Optimizer(options_);
 
     Ptr<Options> opts = New<Options>();
     opts->merge(options_);
     opts->set("inference", true);
     builderTrans_ = models::from_options(opts);
+
+    auto model = options_->get<std::string>("model");
+    scorers_.push_back(New<ScorerWrapper>(builderTrans_, "", 1.0f, model));
   }
 
   void init() {
@@ -110,26 +97,25 @@ public:
 
   void run(std::string text, std::vector<std::string> trainSet) {
     // Training
-
     auto state = New<TrainingState>(options_->get<float>("learn-rate"));
     auto scheduler = New<Scheduler>(options_, state);
     scheduler->registerTrainingObserver(scheduler);
-    scheduler->registerTrainingObserver(opt_);
+    scheduler->registerTrainingObserver(optimizer_);
 
     auto opts = New<Config>(*options_);
     opts->set<size_t>("max-length", 1000);
 
     auto trainset = New<data::TextInput>(trainSet, vocabs_, opts);
-    auto batchGenerator = New<BatchGenerator<data::TextInput>>(trainset, opts);
+    auto trainBG = New<BatchGenerator<data::TextInput>>(trainset, opts);
 
     bool first = true;
 
     scheduler->started();
     while(scheduler->keepGoing()) {
-      batchGenerator->prepare(false);
+      trainBG->prepare(false);
 
-      while(*batchGenerator && scheduler->keepGoing()) {
-        auto batch = batchGenerator->next();
+      while(*trainBG && scheduler->keepGoing()) {
+        auto batch = trainBG->next();
 
         if(first) {
           builder_->build(graph_, batch);
@@ -152,14 +138,13 @@ public:
     scheduler->finished();
 
     // Translation
-
     opts->set<size_t>("mini-batch", 1);
     opts->set<size_t>("maxi-batch", 1);
 
     auto testset = New<data::TextInput>(text, vocabs_.front(), opts);
-    auto bg = New<BatchGenerator<TextInput>>(testset, opts);
-    bg->prepare(false);
-    auto batch = bg->next();
+    auto testBG = New<BatchGenerator<TextInput>>(testset, opts);
+    testBG->prepare(false);
+    auto batch = testBG->next();
 
     translate(batch);
   }

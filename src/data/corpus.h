@@ -30,15 +30,13 @@ public:
   void push_back(const Words& words) { tuple_.push_back(words); }
 
   size_t size() const { return tuple_.size(); }
+  bool empty() const { return tuple_.empty(); }
 
   Words& operator[](size_t i) { return tuple_[i]; }
+  const Words& operator[](size_t i) const { return tuple_[i]; }
 
   Words& back() { return tuple_.back(); }
   const Words& back() const { return tuple_.back(); }
-
-  const Words& operator[](size_t i) const { return tuple_[i]; }
-
-  bool empty() const { return tuple_.empty(); }
 
   auto begin() -> decltype(tuple_.begin()) { return tuple_.begin(); }
   auto end() -> decltype(tuple_.end()) { return tuple_.end(); }
