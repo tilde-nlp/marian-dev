@@ -30,7 +30,7 @@ private:
     graph_->forward();
 
     graphTemp_ = New<ExpressionGraph>();
-    graphTemp_->setDevice(0);
+    graphTemp_->setDevice(graph_->getDevice());
     graphTemp_->reuseWorkspace(graph_);
     //graphTemp_->reserveWorkspaceMB(options_->get<size_t>("workspace"));
 
