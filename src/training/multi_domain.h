@@ -26,18 +26,6 @@ private:
   float train(Ptr<data::Batch> batch) {
     batch->debug();
 
-    builder_->build(graph_, batch);
-    graph_->forward();
-
-    graphTemp_ = New<ExpressionGraph>();
-    graphTemp_->setDevice(graph_->getDevice());
-    graphTemp_->reuseWorkspace(graph_);
-    //graphTemp_->reserveWorkspaceMB(options_->get<size_t>("workspace"));
-
-    LOG(info)->info("Copying params...");
-    graphTemp_->copyParams(graph_);
-    //graphTemp_->params()->vals()->copyFrom(graph_->params()->vals());
-
     LOG(info)->info("Getting cost node...");
     auto costNode = builder_->build(graphTemp_, batch);
     graphTemp_->forward();
@@ -121,11 +109,6 @@ public:
   }
 
   void run(std::string text, std::vector<std::string> trainSet) {
-    //std::cerr << "<< " << text << std::endl;
-    //for(auto t : trainSet) {
-      //std::cerr << ">> " << t << std::endl;
-    //}
-
     // Training
 
     auto state = New<TrainingState>(options_->get<float>("learn-rate"));
@@ -139,11 +122,27 @@ public:
     auto trainset = New<data::TextInput>(trainSet, vocabs_, opts);
     auto batchGenerator = New<BatchGenerator<data::TextInput>>(trainset, opts);
 
+    bool first = true;
+
     scheduler->started();
     while(scheduler->keepGoing()) {
       batchGenerator->prepare(false);
+
       while(*batchGenerator && scheduler->keepGoing()) {
         auto batch = batchGenerator->next();
+
+        if(first) {
+          builder_->build(graph_, batch);
+          graph_->forward();
+
+          graphTemp_ = New<ExpressionGraph>();
+          graphTemp_->setDevice(graph_->getDevice());
+          graphTemp_->reuseWorkspace(graph_);
+
+          graphTemp_->copyParams(graph_);
+          first = false;
+        }
+
         auto cost = train(batch);
         scheduler->update(cost, batch);
       }
