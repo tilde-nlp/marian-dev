@@ -20,37 +20,40 @@ private:
   Ptr<models::ModelBase> builder_;
   Ptr<models::ModelBase> builderTrans_;
   Ptr<ExpressionGraph> graph_;
+  Ptr<ExpressionGraph> graphTemp_;
   Ptr<OptimizerBase> opt_;
 
-  float train(Ptr<ExpressionGraph> graph, Ptr<data::Batch> batch) {
+  float train(Ptr<data::Batch> batch) {
     batch->debug();
 
-    if(!graph) {
-      builder_->build(graph_, batch);
-      graph_->forward();
+    builder_->build(graph_, batch);
+    graph_->forward();
 
-      graph = New<ExpressionGraph>();
-      graph->setDevice(graph_->getDevice());
-      graph->reuseWorkspace(graph_);
+    graphTemp_ = New<ExpressionGraph>();
+    graphTemp_->setDevice(0);
+    graphTemp_->reuseWorkspace(graph_);
+    //graphTemp_->reserveWorkspaceMB(options_->get<size_t>("workspace"));
 
-      graph->params()->vals()->copyFrom(graph_->params()->vals());
+    LOG(info)->info("Copying params...");
+    graphTemp_->copyParams(graph_);
+    //graphTemp_->params()->vals()->copyFrom(graph_->params()->vals());
 
-      //graph->copyParams(graph_);
-    }
+    LOG(info)->info("Getting cost node...");
+    auto costNode = builder_->build(graphTemp_, batch);
+    graphTemp_->forward();
 
-    auto costNode = builder_->build(graph, batch);
-    graph->forward();
-
+    LOG(info)->info("Getting cost...");
     float cost = costNode->scalar();
-    LOG(info)->info("Cost: {}", cost);
-    graph->backward();
 
-    opt_->update(graph);
+    LOG(info)->info("Cost: {}", cost);
+
+    graphTemp_->backward();
+    opt_->update(graphTemp_);
 
     return cost;
   }
 
-  void translate(Ptr<ExpressionGraph> graph, Ptr<data::CorpusBatch> batch) {
+  void translate(Ptr<data::CorpusBatch> batch) {
     // Create scorer
     auto model = options_->get<std::string>("model");
     Ptr<Scorer> scorer = New<ScorerWrapper>(builderTrans_, "", 1.0f, model);
@@ -58,16 +61,16 @@ private:
 
     LOG(valid)->info("Translating...");
 
-    graph->setInference(true);
+    graphTemp_->setInference(true);
     boost::timer::cpu_timer timer;
 
     {
       auto collector = New<OutputCollector>();
       size_t sentenceId = 0;
 
-      graph->clear();
+      graphTemp_->clear();
       auto search = New<BeamSearch>(options_, scorers);
-      auto history = search->search(graph, batch, sentenceId);
+      auto history = search->search(graphTemp_, batch, sentenceId);
 
       std::stringstream best1;
       std::stringstream bestn;
@@ -83,7 +86,7 @@ private:
     }
 
     LOG(valid)->info("Total translation time: {}", timer.format(5, "%ws"));
-    graph->setInference(false);
+    graphTemp_->setInference(false);
   }
 
 public:
@@ -136,15 +139,12 @@ public:
     auto trainset = New<data::TextInput>(trainSet, vocabs_, opts);
     auto batchGenerator = New<BatchGenerator<data::TextInput>>(trainset, opts);
 
-    graph_->clear();
-    Ptr<ExpressionGraph> graph;
-
     scheduler->started();
     while(scheduler->keepGoing()) {
       batchGenerator->prepare(false);
       while(*batchGenerator && scheduler->keepGoing()) {
         auto batch = batchGenerator->next();
-        auto cost = train(graph, batch);
+        auto cost = train(batch);
         scheduler->update(cost, batch);
       }
       if(scheduler->keepGoing())
@@ -162,7 +162,7 @@ public:
     bg->prepare(false);
     auto batch = bg->next();
 
-    translate(graph, batch);
+    translate(batch);
   }
 
   void run() {}
