@@ -53,7 +53,13 @@ public:
   void shuffle() {}
   void reset() {}
 
-  iterator begin() { return iterator(*this); }
+  iterator begin() {
+    for(size_t i = 0; i < files_.size(); ++i) {
+      files_[i]->clear();
+      files_[i]->seekg(0);
+    }
+    return iterator(*this);
+  }
   iterator end() { return iterator(); }
 
   batch_ptr toBatch(const std::vector<sample>& batchVector) {
