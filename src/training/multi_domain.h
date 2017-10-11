@@ -24,9 +24,9 @@ private:
 
   float train(Ptr<ExpressionGraph> graph, Ptr<data::Batch> batch) {
     batch->debug();
-    auto costNode = builder_->build(graph_, batch);
 
     if(!graph) {
+      builder_->build(graph_, batch);
       graph_->forward();
 
       graph = New<ExpressionGraph>();
@@ -36,9 +36,10 @@ private:
       graph->params()->vals()->copyFrom(graph_->params()->vals());
 
       //graph->copyParams(graph_);
-    } else {
-      graph->forward();
     }
+
+    auto costNode = builder_->build(graph, batch);
+    graph->forward();
 
     float cost = costNode->scalar();
     LOG(info)->info("Cost: {}", cost);
