@@ -46,6 +46,8 @@ public:
             std::vector<Ptr<Vocab>> vocabs,
             Ptr<Config> options);
 
+  TextInput(std::string input, Ptr<Vocab> vocab, Ptr<Config> options);
+
   sample next();
 
   void shuffle() {}

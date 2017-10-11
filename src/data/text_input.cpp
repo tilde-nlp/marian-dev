@@ -24,10 +24,16 @@ const SentenceTuple& TextIterator::dereference() const {
 TextInput::TextInput(std::vector<std::string> paths,
                      std::vector<Ptr<Vocab>> vocabs,
                      Ptr<Config> options)
-    : DatasetBase(paths), vocabs_(vocabs), options_(options) {
-  for(auto path : paths_)
+    : vocabs_(vocabs), options_(options) {
+  for(auto path : paths) {
     files_.emplace_back(new std::istringstream(path));
+  }
 }
+
+TextInput::TextInput(std::string path, Ptr<Vocab> vocab, Ptr<Config> options)
+    : TextInput(std::vector<std::string>({path}),
+                std::vector<Ptr<Vocab>>({vocab}),
+                options) {}
 
 SentenceTuple TextInput::next() {
   bool cont = true;
