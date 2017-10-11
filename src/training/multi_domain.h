@@ -24,7 +24,7 @@ private:
 
   float train(Ptr<ExpressionGraph> graph, Ptr<data::Batch> batch) {
     batch->debug();
-    auto costNode = builder_->build(graph, batch);
+    auto costNode = builder_->build(graph_, batch);
 
     if(!graph) {
       graph_->forward();
