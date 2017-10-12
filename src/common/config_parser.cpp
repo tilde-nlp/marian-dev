@@ -154,6 +154,8 @@ void ConfigParser::validateOptions() const {
 
   if(mode_ == ConfigMode::rescoring)
     return;
+  if(mode_ == ConfigMode::continuous)
+    return;
 
   boost::filesystem::path modelPath(get<std::string>("model"));
   auto modelDir = modelPath.parent_path();
@@ -285,7 +287,7 @@ void ConfigParser::addOptionsModel(po::options_description& desc) {
      "Operation after each transformer layer: d = dropout, a = add, n = normalize")
     ;
 
-  if(mode_ == ConfigMode::training) {
+  if(mode_ == ConfigMode::training || mode_ == ConfigMode::continuous) {
     model.add_options()
       ("dropout-rnn", po::value<float>()->default_value(0),
        "Scaling dropout along rnn layers and time (0 = no dropout)")
@@ -515,7 +517,7 @@ void ConfigParser::addOptionsTranslate(po::options_description& desc) {
     ("weights", po::value<std::vector<float>>()
       ->multitoken(),
       "Scorer weights")
-    // TODO: the options should be available only in server
+    // TODO: the option should be available only in server
     ("port,p", po::value<size_t>()->default_value(8080),
       "Port number for web socket server")
   ;
@@ -524,7 +526,7 @@ void ConfigParser::addOptionsTranslate(po::options_description& desc) {
 }
 
 void ConfigParser::addOptionsRescore(po::options_description& desc) {
-  po::options_description rescore("Rescorer options", guess_terminal_width());
+  po::options_description rescore("Scorer options", guess_terminal_width());
   // clang-format off
   rescore.add_options()
     ("no-reload", po::value<bool>()->zero_tokens()->default_value(false),
@@ -558,9 +560,18 @@ void ConfigParser::addOptionsRescore(po::options_description& desc) {
   desc.add(rescore);
 }
 
-void ConfigParser::parseOptions(
-    int argc, char** argv, bool doValidate) {
+//void ConfigParser::addOptionsContinuous(po::options_description& desc) {
+  //po::options_description continuous("Continuous training options", guess_terminal_width());
+  //// clang-format off
+  //continuous.add_options()
+    //("train-mapping", po::value<std::string>(),
+      //"Path to a file mapping training examples with inputs")
+    //;
+  //// clang-format on
+  //desc.add(continuous);
+//}
 
+void ConfigParser::parseOptions(int argc, char** argv, bool doValidate) {
   addOptionsCommon(cmdline_options_);
   addOptionsModel(cmdline_options_);
 
@@ -575,6 +586,10 @@ void ConfigParser::parseOptions(
     case ConfigMode::training:
       addOptionsTraining(cmdline_options_);
       addOptionsValid(cmdline_options_);
+      break;
+    case ConfigMode::continuous:
+      addOptionsTraining(cmdline_options_);
+      addOptionsTranslate(cmdline_options_);
       break;
   }
   // clang-format on
@@ -601,13 +616,26 @@ void ConfigParser::parseOptions(
 
   if(mode_ == ConfigMode::translating) {
     if(vm_.count("models") == 0 && vm_.count("config") == 0) {
-      std::cerr << "Error: you need to provide at least one model file or a config file" << std::endl << std::endl;
+      std::cerr << "Error: you need to provide at least one model file or a "
+                   "config file"
+                << std::endl;
 
       std::cerr << "Usage: " + std::string(argv[0]) + " [options]" << std::endl;
       std::cerr << cmdline_options_ << std::endl;
-      exit(0);
+      exit(1);
     }
   }
+  //if(mode_ == ConfigMode::continuous) {
+    //if(vm_.count("model") == 0 && vm_.count("config") == 0) {
+      //std::cerr << "Error: you need to provide a model file or a "
+                   //"config file"
+                //<< std::endl;
+
+      //std::cerr << "Usage: " + std::string(argv[0]) + " [options]" << std::endl;
+      //std::cerr << cmdline_options_ << std::endl;
+      //exit(1);
+    //}
+  //}
 
   if(vm_["version"].as<bool>()) {
     std::cerr << PROJECT_VERSION_FULL << std::endl;
@@ -618,12 +646,16 @@ void ConfigParser::parseOptions(
   if(vm_.count("config")) {
     configPath = vm_["config"].as<std::string>();
     config_ = YAML::Load(InputFileStream(configPath));
-  } else if((mode_ == ConfigMode::training)
-            && boost::filesystem::exists(vm_["model"].as<std::string>()
-                                         + ".yml")
-            && !vm_["no-reload"].as<bool>()) {
-    configPath = vm_["model"].as<std::string>() + ".yml";
-    config_ = YAML::Load(InputFileStream(configPath));
+  } else {
+    auto defaultConfigPath = vm_["model"].as<std::string>() + ".yml";
+    auto doReload = !vm_["no-reload"].as<bool>();
+
+    if((mode_ == ConfigMode::training || mode_ == ConfigMode::continuous)
+       && boost::filesystem::exists(defaultConfigPath)
+       && doReload) {
+      configPath = defaultConfigPath;
+      config_ = YAML::Load(InputFileStream(configPath));
+    }
   }
 
   /** model **/
@@ -667,8 +699,7 @@ void ConfigParser::parseOptions(
   SET_OPTION("best-deep", bool);
   SET_OPTION_NONDEFAULT("special-vocab", std::vector<size_t>);
 
-  if(mode_ == ConfigMode::training) {
-
+  if(mode_ == ConfigMode::training || mode_ == ConfigMode::continuous) {
     SET_OPTION("cost-type", std::string);
 
     SET_OPTION("dropout-rnn", float);
@@ -735,7 +766,7 @@ void ConfigParser::parseOptions(
     SET_OPTION("dynamic-batching", bool);
     SET_OPTION_NONDEFAULT("summary", std::string);
   }
-  if(mode_ == ConfigMode::translating) {
+  if(mode_ == ConfigMode::translating || mode_ == ConfigMode::continuous) {
     SET_OPTION("input", std::vector<std::string>);
     SET_OPTION("beam-size", size_t);
     SET_OPTION("normalize", bool);
@@ -789,7 +820,7 @@ void ConfigParser::parseOptions(
   SET_OPTION("mini-batch", int);
   SET_OPTION("maxi-batch", int);
 
-  if(mode_ == ConfigMode::training)
+  if(mode_ == ConfigMode::training || mode_ == ConfigMode::continuous)
     SET_OPTION("maxi-batch-sort", std::string);
   SET_OPTION("max-length", size_t);
 

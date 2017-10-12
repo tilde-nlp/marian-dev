@@ -9,7 +9,7 @@
 int main(int argc, char** argv) {
   using namespace marian;
 
-  auto options = New<Config>(argc, argv);
+  auto options = New<Config>(argc, argv, ConfigMode::continuous);
   New<TrainMultiDomain>(options)->run();
 
   return 0;
