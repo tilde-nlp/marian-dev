@@ -106,7 +106,7 @@ public:
 
     while(*testBatches) {
       auto testBatch = testBatches->next();
-      auto trainSents = trainSet->getSamples(1);
+      auto trainSents = trainSet->getSamples(options_->get<size_t>("train-samples"));
 
       if(!trainSents.empty()) {
         train(trainSents);

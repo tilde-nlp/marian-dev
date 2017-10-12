@@ -308,6 +308,16 @@ void ConfigParser::addOptionsModel(po::options_description& desc) {
 
 void ConfigParser::addOptionsTraining(po::options_description& desc) {
   po::options_description training("Training options", guess_terminal_width());
+
+  bool ctMode = mode_ == ConfigMode::continuous;
+
+  size_t defaultAfterEpochs = ctMode ? 2 : 0;
+  size_t defaultDispFreq = ctMode ? 1 : 1000;
+  int defaultMiniBatch = ctMode ? 1 : 64;
+  int defaultMaxiBatch = ctMode ? 1 : 100;
+  std::string defaultOptimizer = ctMode ? "sgd" : "adam";
+  double defaultLearnRate = ctMode ? 0.5 : 0.0001;
+
   // clang-format off
   training.add_options()
     ("cost-type", po::value<std::string>()->default_value("ce-mean"),
@@ -325,16 +335,16 @@ void ConfigParser::addOptionsTraining(po::options_description& desc) {
       "If these files do not exists they are created")
     ("max-length", po::value<size_t>()->default_value(50),
       "Maximum length of a sentence in a training sentence pair")
-    ("after-epochs,e", po::value<size_t>()->default_value(0),
+    ("after-epochs,e", po::value<size_t>()->default_value(defaultAfterEpochs),
       "Finish after this many epochs, 0 is infinity")
     ("after-batches", po::value<size_t>()->default_value(0),
       "Finish after this many batch updates, 0 is infinity")
-    ("disp-freq", po::value<size_t>()->default_value(1000),
+    ("disp-freq", po::value<size_t>()->default_value(defaultDispFreq),
       "Display information every  arg  updates")
     ("save-freq", po::value<size_t>()->default_value(10000),
       "Save model file every  arg  updates")
     ("no-shuffle", po::value<bool>()->zero_tokens()->default_value(false),
-    "Skip shuffling of training data before each epoch")
+      "Skip shuffling of training data before each epoch")
     ("tempdir,T", po::value<std::string>()->default_value("/tmp"),
       "Directory for temporary (shuffled) files")
     ("devices,d", po::value<std::vector<int>>()
@@ -342,23 +352,23 @@ void ConfigParser::addOptionsTraining(po::options_description& desc) {
       ->default_value(std::vector<int>({0}), "0"),
       "GPUs to use for training. Asynchronous SGD is used with multiple devices")
 
-    ("mini-batch", po::value<int>()->default_value(64),
+    ("mini-batch", po::value<int>()->default_value(defaultMiniBatch),
       "Size of mini-batch used during update")
     ("mini-batch-words", po::value<int>()->default_value(0),
       "Set mini-batch size based on words instead of sentences")
     ("dynamic-batching", po::value<bool>()->zero_tokens()->default_value(false),
       "Determine mini-batch size dynamically based on sentence-length and reserved memory")
-    ("maxi-batch", po::value<int>()->default_value(100),
+    ("maxi-batch", po::value<int>()->default_value(defaultMaxiBatch),
       "Number of batches to preload for length-based sorting")
     ("maxi-batch-sort", po::value<std::string>()->default_value("trg"),
       "Sorting strategy for maxi-batch: trg (default) src none")
 
-    ("optimizer,o", po::value<std::string>()->default_value("adam"),
+    ("optimizer,o", po::value<std::string>()->default_value(defaultOptimizer),
      "Optimization algorithm (possible values: sgd, adagrad, adam")
     ("optimizer-params",  po::value<std::vector<float>>()
        ->multitoken(),
      "Parameters for optimization algorithm, e.g. betas for adam")
-    ("learn-rate,l", po::value<double>()->default_value(0.0001),
+    ("learn-rate,l", po::value<double>()->default_value(defaultLearnRate),
      "Learning rate")
     ("lr-decay", po::value<double>()->default_value(0.0),
      "Decay factor for learning rate: lr = lr * arg (0 to disable)")
@@ -431,6 +441,14 @@ void ConfigParser::addOptionsTraining(po::options_description& desc) {
      ->zero_tokens()->default_value(false),
      "Report learning rate for each update")
   ;
+
+  if(mode_ == ConfigMode::continuous) {
+    training.add_options()
+      ("train-samples", po::value<size_t>()->default_value(1),
+       "Assume  arg  training samples per each input when translating with a "
+       "continuous training")
+    ;
+  }
   // clang-format on
   desc.add(training);
 }
@@ -560,17 +578,6 @@ void ConfigParser::addOptionsRescore(po::options_description& desc) {
   desc.add(rescore);
 }
 
-//void ConfigParser::addOptionsContinuous(po::options_description& desc) {
-  //po::options_description continuous("Continuous training options", guess_terminal_width());
-  //// clang-format off
-  //continuous.add_options()
-    //("train-mapping", po::value<std::string>(),
-      //"Path to a file mapping training examples with inputs")
-    //;
-  //// clang-format on
-  //desc.add(continuous);
-//}
-
 void ConfigParser::parseOptions(int argc, char** argv, bool doValidate) {
   addOptionsCommon(cmdline_options_);
   addOptionsModel(cmdline_options_);
@@ -625,17 +632,17 @@ void ConfigParser::parseOptions(int argc, char** argv, bool doValidate) {
       exit(1);
     }
   }
-  //if(mode_ == ConfigMode::continuous) {
-    //if(vm_.count("model") == 0 && vm_.count("config") == 0) {
-      //std::cerr << "Error: you need to provide a model file or a "
-                   //"config file"
-                //<< std::endl;
+  if(mode_ == ConfigMode::continuous) {
+    if(vm_.count("model") == 0 && vm_.count("config") == 0) {
+      std::cerr << "Error: you need to provide a model file or a "
+                   "config file"
+                << std::endl;
 
-      //std::cerr << "Usage: " + std::string(argv[0]) + " [options]" << std::endl;
-      //std::cerr << cmdline_options_ << std::endl;
-      //exit(1);
-    //}
-  //}
+      std::cerr << "Usage: " + std::string(argv[0]) + " [options]" << std::endl;
+      std::cerr << cmdline_options_ << std::endl;
+      exit(1);
+    }
+  }
 
   if(vm_["version"].as<bool>()) {
     std::cerr << PROJECT_VERSION_FULL << std::endl;
@@ -774,6 +781,9 @@ void ConfigParser::parseOptions(int argc, char** argv, bool doValidate) {
     SET_OPTION("n-best", bool);
     SET_OPTION_NONDEFAULT("weights", std::vector<float>);
     SET_OPTION("port", size_t);
+  }
+  if(mode_ == ConfigMode::continuous) {
+    SET_OPTION("train-samples", size_t);
   }
 
   /** valid **/
