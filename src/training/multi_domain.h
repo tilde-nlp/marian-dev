@@ -11,9 +11,46 @@ namespace marian {
 
 using namespace data;
 
+class TrainSetReader {
+  std::vector<UPtr<InputFileStream>> files_;
+
+public:
+  TrainSetReader(std::vector<std::string> paths) {
+    for(auto& path : paths)
+      files_.emplace_back(new InputFileStream(path));
+  }
+
+  // @TODO: make it prone to data sets with missing target/source sentences or
+  // replace with a proper data::Corpus object
+  std::vector<std::string> getSamples(size_t n = 1) {
+    std::vector<std::string> samples;
+    if(n < 1)
+      return samples;
+
+    for(auto const& file : files_) {
+      std::string lines;
+      if(!std::getline((std::istream&)*file, lines))
+        return {};
+
+      for(size_t i = 1; i < n; ++i) {
+        std::string line("\n");
+        if(!std::getline((std::istream&)*file, line))
+          return {};
+        lines += line;
+      }
+
+      samples.emplace_back(lines);
+    }
+
+    return samples;
+  }
+};
+
 class TrainMultiDomain : public ModelTask {
 public:
   TrainMultiDomain(Ptr<Config> options) : options_(options) {
+    options_->set("max-length", 1000);
+
     size_t device = options_->get<std::vector<size_t>>("devices")[0];
 
     // Initialize model for training
@@ -49,53 +86,68 @@ public:
   }
 
   void run() {
-    std::string line;
-    while(std::getline(std::cin, line)) {
-      std::vector<std::string> inputs;
-      Split(line, inputs, "\t");
+    auto opts = New<Config>(*options_);
+    opts->set<size_t>("mini-batch", 1);
+    opts->set<size_t>("maxi-batch", 1);
 
-      std::string text(inputs.back());
-      std::vector<std::string> trainSet(inputs.begin(), inputs.end() - 1);
+    // Initialize input data
+    auto srcPaths = options_->get<std::vector<std::string>>("input");
+    std::vector<Ptr<Vocab>> srcVocabs(vocabs_.begin(), vocabs_.end() - 1);
+    auto testset = New<Corpus>(srcPaths, srcVocabs, opts);
 
-      run(text, trainSet);
+    // Prepare batches
+    auto testBatches = New<BatchGenerator<Corpus>>(testset, opts);
+    testBatches->prepare(false);
+    size_t id = 0;
+
+    // Initialize train data
+    auto trainPaths = options_->get<std::vector<std::string>>("train-sets");
+    auto trainSet = New<TrainSetReader>(trainPaths);
+
+    while(*testBatches) {
+      auto testBatch = testBatches->next();
+      auto trainSents = trainSet->getSamples(1);
+
+      if(!trainSents.empty()) {
+        train(trainSents);
+        translate(testBatch);
+      } else {
+        translate(testBatch, true);
+      }
     }
   }
 
 private:
   Ptr<Config> options_;
 
-  std::vector<Ptr<Vocab>> vocabs_;
-  std::vector<Ptr<Scorer>> scorers_;
-
   Ptr<models::ModelBase> builder_;      // Training model
   Ptr<models::ModelBase> builderTrans_; // Translation model
   Ptr<ExpressionGraph> graph_;          // A graph with original parameters
   Ptr<ExpressionGraph> graphTemp_;      // A graph on which training is performed
 
+  std::vector<Ptr<Vocab>> vocabs_;
+  std::vector<Ptr<Scorer>> scorers_;
   Ptr<OptimizerBase> optimizer_;
 
-  void run(std::string text, std::vector<std::string> trainSet) {
-    // Training
+  void train(std::vector<std::string> trainSents) {
     auto state = New<TrainingState>(options_->get<float>("learn-rate"));
     auto scheduler = New<Scheduler>(options_, state);
     scheduler->registerTrainingObserver(scheduler);
     scheduler->registerTrainingObserver(optimizer_);
 
-    auto opts = New<Config>(*options_);
-    opts->set<size_t>("max-length", 1000);
-
-    auto trainset = New<data::TextInput>(trainSet, vocabs_, opts);
-    auto trainBG = New<BatchGenerator<data::TextInput>>(trainset, opts);
+    auto trainSet = New<data::TextInput>(trainSents, vocabs_, options_);
+    auto trainBatches = New<BatchGenerator<data::TextInput>>(trainSet, options_);
 
     bool first = true;
 
     scheduler->started();
     while(scheduler->keepGoing()) {
-      trainBG->prepare(false);
+      trainBatches->prepare(false);
 
-      while(*trainBG && scheduler->keepGoing()) {
-        auto batch = trainBG->next();
+      while(*trainBatches && scheduler->keepGoing()) {
+        auto batch = trainBatches->next();
 
+        // Copy params from the original model
         if(first) {
           builder_->build(graph_, batch);
           graph_->forward();
@@ -108,46 +160,38 @@ private:
           first = false;
         }
 
-        auto cost = train(batch);
+        // Make an update step on the copy of the model
+        auto costNode = builder_->build(graphTemp_, batch);
+        graphTemp_->forward();
+        float cost = costNode->scalar();
+        graphTemp_->backward();
+
+        // Notify optimizer and scheduler
+        optimizer_->update(graphTemp_);
         scheduler->update(cost, batch);
       }
       if(scheduler->keepGoing())
         scheduler->increaseEpoch();
     }
     scheduler->finished();
-
-    // Translation
-    opts->set<size_t>("mini-batch", 1);
-    opts->set<size_t>("maxi-batch", 1);
-
-    auto testset = New<data::TextInput>(text, vocabs_.front(), opts);
-    auto testBG = New<BatchGenerator<TextInput>>(testset, opts);
-    testBG->prepare(false);
-    auto batch = testBG->next();
-
-    translate(batch);
   }
 
-  float train(Ptr<data::Batch> batch) {
-    auto costNode = builder_->build(graphTemp_, batch);
-    graphTemp_->forward();
-    float cost = costNode->scalar();
-    graphTemp_->backward();
+  void translate(Ptr<data::CorpusBatch> batch, bool originalModel = false) {
+    if(originalModel) {
+      graph_->setInference(true);
+      graph_->clear();
+    } else {
+      graphTemp_->setInference(true);
+      graphTemp_->clear();
+    }
 
-    optimizer_->update(graphTemp_);
-
-    return cost;
-  }
-
-  void translate(Ptr<data::CorpusBatch> batch) {
-    graphTemp_->setInference(true);
     {
       auto collector = New<OutputCollector>();
       size_t sentenceId = 0;
 
-      graphTemp_->clear();
       auto search = New<BeamSearch>(options_, scorers_);
-      auto history = search->search(graphTemp_, batch, sentenceId);
+      auto history = search->search(
+          originalModel ? graph_ : graphTemp_, batch, sentenceId);
 
       std::stringstream best1;
       std::stringstream bestn;
@@ -160,7 +204,11 @@ private:
 
       ++sentenceId;
     }
-    graphTemp_->setInference(false);
+
+    if(originalModel)
+      graph_->setInference(false);
+    else
+      graphTemp_->setInference(false);
   }
 };
 }
