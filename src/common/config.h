@@ -85,6 +85,13 @@ public:
   }
 
   template <typename T>
+  T get(const std::string& key, const T& defaultValue) const {
+    if(has(key))
+      return config_[key].as<T>();
+    return defaultValue;
+  }
+
+  template <typename T>
   void set(const std::string& key, const T& value) {
     config_[key] = value;
   }
