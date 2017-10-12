@@ -80,6 +80,7 @@ public:
 
   template <typename T>
   T get(const std::string& key) const {
+    UTIL_THROW_IF2(!has(key), "Key '" << key << "' not found in the config");
     return config_[key].as<T>();
   }
 

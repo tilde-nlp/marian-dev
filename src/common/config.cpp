@@ -17,6 +17,7 @@ bool Config::has(const std::string& key) const {
 }
 
 YAML::Node Config::get(const std::string& key) const {
+  UTIL_THROW_IF2(!has(key), "Key '" << key << "' not found in the config");
   return config_[key];
 }
 
