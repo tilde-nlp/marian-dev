@@ -200,6 +200,8 @@ void ConfigParser::addOptionsCommon(po::options_description& desc) {
     ("log-level", po::value<std::string>()->default_value("info"),
      "Set verbosity level of logging "
      "(trace - debug - info - warn - err(or) - critical - off)")
+    ("quiet", po::value<bool>()->zero_tokens()->default_value(false),
+     "Suppress all logging to stderr. Logging to files still works")
     ("seed", po::value<size_t>()->default_value(0),
      "Seed for all random number generators. 0 means initialize randomly")
     ("relative-paths", po::value<bool>()->zero_tokens()->default_value(false),
@@ -220,9 +222,7 @@ void ConfigParser::addOptionsModel(po::options_description& desc) {
   // clang-format off
   if(mode_ == ConfigMode::translating) {
     model.add_options()
-    ("models,m", po::value<std::vector<std::string>>()
-      ->multitoken()
-      ->default_value(std::vector<std::string>({"model.npz"}), "model.npz"),
+    ("models,m", po::value<std::vector<std::string>>()->multitoken(),
      "Paths to model(s) to be loaded");
   } else {
     model.add_options()
@@ -599,6 +599,16 @@ void ConfigParser::parseOptions(
     exit(0);
   }
 
+  if(mode_ == ConfigMode::translating) {
+    if(vm_.count("models") == 0 && vm_.count("config") == 0) {
+      std::cerr << "Error: you need to provide at least one model file or a config file" << std::endl << std::endl;
+
+      std::cerr << "Usage: " + std::string(argv[0]) + " [options]" << std::endl;
+      std::cerr << cmdline_options_ << std::endl;
+      exit(0);
+    }
+  }
+
   if(vm_["version"].as<bool>()) {
     std::cerr << PROJECT_VERSION_FULL << std::endl;
     exit(0);
@@ -732,7 +742,6 @@ void ConfigParser::parseOptions(
     SET_OPTION("allow-unk", bool);
     SET_OPTION("n-best", bool);
     SET_OPTION_NONDEFAULT("weights", std::vector<float>);
-    // SET_OPTION_NONDEFAULT("lexical-table", std::string);
     SET_OPTION("port", size_t);
   }
 
@@ -772,6 +781,7 @@ void ConfigParser::parseOptions(
 
   SET_OPTION("workspace", size_t);
   SET_OPTION("log-level", std::string);
+  SET_OPTION("quiet", bool);
   SET_OPTION_NONDEFAULT("log", std::string);
   SET_OPTION("seed", size_t);
   SET_OPTION("relative-paths", bool);

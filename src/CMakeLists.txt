@@ -51,20 +51,20 @@ set_target_properties(marian PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY
 cuda_add_executable(marian_train command/marian.cpp)
 set_target_properties(marian_train PROPERTIES OUTPUT_NAME marian)
 
-add_executable(marian_translate command/s2s_translator.cpp)
-set_target_properties(marian_translate PROPERTIES OUTPUT_NAME s2s)
+add_executable(marian_decoder command/marian_decoder.cpp)
+set_target_properties(marian_decoder PROPERTIES OUTPUT_NAME marian-decoder)
 
-cuda_add_executable(marian_rescore command/s2s_rescorer.cpp)
-set_target_properties(marian_rescore PROPERTIES OUTPUT_NAME rescorer)
+cuda_add_executable(marian_scorer command/marian_scorer.cpp)
+set_target_properties(marian_scorer PROPERTIES OUTPUT_NAME marian-scorer)
 
 cuda_add_executable(marian_multi_domain command/marian_multi_domain.cpp)
 set_target_properties(marian_multi_domain PROPERTIES OUTPUT_NAME marian-multi-domain)
 
-set(EXECUTABLES ${EXECUTABLES} marian_train marian_translate marian_rescore marian_multi_domain)
+set(EXECUTABLES ${EXECUTABLES} marian_train marian_decoder marian_scorer marian_multi_domain)
 
 if(COMPILE_SERVER)
-  add_executable(marian_server command/s2s_server.cpp)
-  set_target_properties(marian_server PROPERTIES OUTPUT_NAME server)
+  add_executable(marian_server command/marian_server.cpp)
+  set_target_properties(marian_server PROPERTIES OUTPUT_NAME marian-server)
   set(EXECUTABLES ${EXECUTABLES} marian_server)
 endif(COMPILE_SERVER)
 
