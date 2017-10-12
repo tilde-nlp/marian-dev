@@ -7,64 +7,16 @@
 #include "training/scheduler.h"
 #include "training/validator.h"
 
-
 namespace marian {
 
 using namespace data;
 
 class TrainMultiDomain : public ModelTask {
-private:
-  Ptr<Config> options_;
-
-  std::vector<Ptr<Vocab>> vocabs_;
-  std::vector<Ptr<Scorer>> scorers_;
-
-  Ptr<models::ModelBase> builder_;
-  Ptr<models::ModelBase> builderTrans_;
-  Ptr<ExpressionGraph> graph_;
-  Ptr<ExpressionGraph> graphTemp_;
-
-  Ptr<OptimizerBase> optimizer_;
-
-  float train(Ptr<data::Batch> batch) {
-    auto costNode = builder_->build(graphTemp_, batch);
-    graphTemp_->forward();
-    float cost = costNode->scalar();
-    graphTemp_->backward();
-
-    optimizer_->update(graphTemp_);
-
-    return cost;
-  }
-
-  void translate(Ptr<data::CorpusBatch> batch) {
-    graphTemp_->setInference(true);
-    {
-      auto collector = New<OutputCollector>();
-      size_t sentenceId = 0;
-
-      graphTemp_->clear();
-      auto search = New<BeamSearch>(options_, scorers_);
-      auto history = search->search(graphTemp_, batch, sentenceId);
-
-      std::stringstream best1;
-      std::stringstream bestn;
-      Printer(options_, vocabs_.back(), history, best1, bestn);
-
-      collector->Write(history->GetLineNum(),
-                       best1.str(),
-                       bestn.str(),
-                       options_->get<bool>("n-best"));
-
-      ++sentenceId;
-    }
-    graphTemp_->setInference(false);
-  }
-
 public:
   TrainMultiDomain(Ptr<Config> options) : options_(options) {
     size_t device = options_->get<std::vector<size_t>>("devices")[0];
 
+    // Initialize model for training
     graph_ = New<ExpressionGraph>();
     graph_->setDevice(device);
     graph_->reserveWorkspaceMB(options_->get<size_t>("workspace"));
@@ -72,28 +24,55 @@ public:
 
     optimizer_ = Optimizer(options_);
 
+    // Initialize model for translation
     Ptr<Options> opts = New<Options>();
     opts->merge(options_);
     opts->set("inference", true);
     builderTrans_ = models::from_options(opts);
 
+    // Initialize a scorer for translation
     auto model = options_->get<std::string>("model");
-    scorers_.push_back(New<ScorerWrapper>(builderTrans_, "", 1.0f, model));
-  }
+    Ptr<Scorer> scorer = New<ScorerWrapper>(builderTrans_, "", 1.0f, model);
+    scorers_.push_back(scorer);
 
-  void init() {
+    // Read vocabularies
     auto vocabPaths = options_->get<std::vector<std::string>>("vocabs");
     std::vector<int> maxVocabs = options_->get<std::vector<int>>("dim-vocabs");
-
     for(size_t i = 0; i < vocabPaths.size(); ++i) {
       Ptr<Vocab> vocab = New<Vocab>();
       vocab->load(vocabPaths[i], maxVocabs[i]);
       vocabs_.emplace_back(vocab);
     }
 
-    std::string name = options_->get<std::string>("model");
-    builder_->load(graph_, name);
+    // Load model
+    builder_->load(graph_, model);
   }
+
+  void run() {
+    std::string line;
+    while(std::getline(std::cin, line)) {
+      std::vector<std::string> inputs;
+      Split(line, inputs, "\t");
+
+      std::string text(inputs.back());
+      std::vector<std::string> trainSet(inputs.begin(), inputs.end() - 1);
+
+      run(text, trainSet);
+    }
+  }
+
+private:
+  Ptr<Config> options_;
+
+  std::vector<Ptr<Vocab>> vocabs_;
+  std::vector<Ptr<Scorer>> scorers_;
+
+  Ptr<models::ModelBase> builder_;      // Training model
+  Ptr<models::ModelBase> builderTrans_; // Translation model
+  Ptr<ExpressionGraph> graph_;          // A graph with original parameters
+  Ptr<ExpressionGraph> graphTemp_;      // A graph on which training is performed
+
+  Ptr<OptimizerBase> optimizer_;
 
   void run(std::string text, std::vector<std::string> trainSet) {
     // Training
@@ -149,7 +128,39 @@ public:
     translate(batch);
   }
 
-  void run() {}
+  float train(Ptr<data::Batch> batch) {
+    auto costNode = builder_->build(graphTemp_, batch);
+    graphTemp_->forward();
+    float cost = costNode->scalar();
+    graphTemp_->backward();
 
+    optimizer_->update(graphTemp_);
+
+    return cost;
+  }
+
+  void translate(Ptr<data::CorpusBatch> batch) {
+    graphTemp_->setInference(true);
+    {
+      auto collector = New<OutputCollector>();
+      size_t sentenceId = 0;
+
+      graphTemp_->clear();
+      auto search = New<BeamSearch>(options_, scorers_);
+      auto history = search->search(graphTemp_, batch, sentenceId);
+
+      std::stringstream best1;
+      std::stringstream bestn;
+      Printer(options_, vocabs_.back(), history, best1, bestn);
+
+      collector->Write(history->GetLineNum(),
+                       best1.str(),
+                       bestn.str(),
+                       options_->get<bool>("n-best"));
+
+      ++sentenceId;
+    }
+    graphTemp_->setInference(false);
+  }
 };
 }
