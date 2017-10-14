@@ -104,6 +104,8 @@ public:
     auto trainPaths = options_->get<std::vector<std::string>>("train-sets");
     auto trainSet = New<TrainSetReader>(trainPaths);
 
+    LOG(info)->info("Running...");
+
     while(*testBatches) {
       auto testBatch = testBatches->next();
       auto trainSents = trainSet->getSamples(options_->get<size_t>("train-samples"));
