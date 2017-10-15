@@ -71,7 +71,7 @@ public:
   std::vector<Ptr<SubBatch>> split(size_t n) {
     std::vector<Ptr<SubBatch>> splits;
 
-    size_t subSize = std::ceil(size_ / (float) n);
+    size_t subSize = std::ceil(size_ / (float)n);
     size_t totSize = size_;
 
     int pos = 0;
@@ -381,6 +381,5 @@ private:
     wordAlignment_ = New<WordAlignment>(path);
   }
 };
-
 }
 }
