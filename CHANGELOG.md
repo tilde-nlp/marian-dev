@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Translator for [multi-domain translation through unsupervised
+  adaptation](http://www.statmt.org/wmt17/pdf/WMT13.pdf)
+
 ## [1.0.0] - 2017-10-15
 
 ### Added
