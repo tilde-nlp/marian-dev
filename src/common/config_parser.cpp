@@ -520,8 +520,6 @@ void ConfigParser::addOptionsTranslate(po::options_description& desc) {
       ->multitoken()
       ->default_value(std::vector<std::string>({"stdin"}), "stdin"),
       "Paths to input file(s), stdin by default")
-    ("vocabs,v", po::value<std::vector<std::string>>()->multitoken(),
-      "Paths to vocabulary files have to correspond to --input")
     ("beam-size,b", po::value<size_t>()->default_value(12),
       "Beam size used during search")
     ("normalize,n", po::value<bool>()->zero_tokens()->default_value(false),
@@ -533,6 +531,8 @@ void ConfigParser::addOptionsTranslate(po::options_description& desc) {
 
   if(mode_ != ConfigMode::continuous) {
     translate.add_options()
+      ("vocabs,v", po::value<std::vector<std::string>>()->multitoken(),
+        "Paths to vocabulary files have to correspond to --input")
       ("devices,d", po::value<std::vector<int>>()
         ->multitoken()
         ->default_value(std::vector<int>({0}), "0"),
