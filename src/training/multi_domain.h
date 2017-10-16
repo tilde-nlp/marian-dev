@@ -108,7 +108,8 @@ public:
 
     while(*testBatches) {
       auto testBatch = testBatches->next();
-      auto trainSents = trainSet->getSamples(options_->get<size_t>("train-samples"));
+      auto trainSents
+          = trainSet->getSamples(options_->get<size_t>("train-samples"));
 
       if(!trainSents.empty()) {
         train(trainSents);
@@ -122,10 +123,10 @@ public:
 private:
   Ptr<Config> options_;
 
-  Ptr<models::ModelBase> builder_;      // Training model
-  Ptr<models::ModelBase> builderTrans_; // Translation model
-  Ptr<ExpressionGraph> graph_;          // A graph with original parameters
-  Ptr<ExpressionGraph> graphTemp_;      // A graph on which training is performed
+  Ptr<models::ModelBase> builder_;       // Training model
+  Ptr<models::ModelBase> builderTrans_;  // Translation model
+  Ptr<ExpressionGraph> graph_;           // A graph with original parameters
+  Ptr<ExpressionGraph> graphTemp_;  // A graph on which training is performed
 
   std::vector<Ptr<Vocab>> vocabs_;
   std::vector<Ptr<Scorer>> scorers_;
@@ -138,7 +139,8 @@ private:
     scheduler->registerTrainingObserver(optimizer_);
 
     auto trainSet = New<data::TextInput>(trainSents, vocabs_, options_);
-    auto trainBatches = New<BatchGenerator<data::TextInput>>(trainSet, options_);
+    auto trainBatches
+        = New<BatchGenerator<data::TextInput>>(trainSet, options_);
 
     bool first = true;
 

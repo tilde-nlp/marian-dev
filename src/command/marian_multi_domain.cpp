@@ -1,10 +1,9 @@
 #include "marian.h"
 
-#include "training/training.h"
-#include "training/multi_domain.h"
 #include "common/file_stream.h"
 #include "common/utils.h"
-
+#include "training/multi_domain.h"
+#include "training/training.h"
 
 int main(int argc, char** argv) {
   using namespace marian;
