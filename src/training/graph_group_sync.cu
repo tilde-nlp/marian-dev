@@ -14,9 +14,8 @@ void SyncGraphGroup::setScheduler(Ptr<Scheduler> scheduler) {
 
 void SyncGraphGroup::updateMovingAverage(Tensor paramsAvg,
                                          Tensor params,
-                                         size_t batches) {
+                                         float decay) {
   using namespace functional;
-  float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
   Element(_1 = ((1.f - decay) * _1) + (decay * _2), paramsAvg, params);
 }
 
@@ -138,11 +137,23 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
         i++;
       }
 
-      shardOpt_[idx]->update(params_[idx], grads_[idx]);
+      float decay = 0;
+      if(movingAvg_) {
+        size_t batches = scheduler_->numberOfBatches();
+        decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+        shardOpt_[idx]->elasticUpdate(params_[idx],
+                                      grads_[idx],
+                                      paramsAvg_[idx],
+                                      decay);
+      }
+      else {
+        shardOpt_[idx]->update(params_[idx], grads_[idx]);
+      }
 
-      if(movingAvg_)
-        updateMovingAverage(
-            paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
+      if(movingAvg_) {
+        // update with current or previous parameters?
+        updateMovingAverage(paramsAvg_[idx], params_[idx], decay);
+      }
 
       for(auto graph : graphs_) {
         auto subParam = graph->params()->vals()->subtensor(pos, size);

@@ -31,7 +31,7 @@ private:
   bool movingAvg_{false};
   float mvDecay_{1e-4};
 
-  void updateMovingAverage(Tensor paramsAvg, Tensor params, size_t batches);
+  void updateMovingAverage(Tensor paramsAvg, Tensor params, float decay);
 
   void fetchParams(Tensor oldParams, const std::vector<Tensor>& params);
 

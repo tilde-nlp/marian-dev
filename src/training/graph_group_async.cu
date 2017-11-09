@@ -47,16 +47,27 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
           grads_[idx]->copyFrom(newGrads->subtensor(pos, grads_[idx]->size()));
 
+          float decay = 0;
           if(scaleLearningRate_) {
-            shardOpt_[idx]->update(
-                params_[idx], grads_[idx], batch_words / avgBatchWords_);
+            shardOpt_[idx]->update(params_[idx], grads_[idx], batch_words / avgBatchWords_);
           } else {
-            shardOpt_[idx]->update(params_[idx], grads_[idx]);
+            if(movingAvg_) {
+              size_t batches = scheduler_->numberOfBatches();
+              decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+              shardOpt_[idx]->elasticUpdate(params_[idx],
+                                            grads_[idx],
+                                            paramsAvg_[idx],
+                                            decay);
+            }
+            else {
+              shardOpt_[idx]->update(params_[idx], grads_[idx]);
+            }
           }
 
-          if(movingAvg_)
-            updateMovingAverage(
-                paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
+          if(movingAvg_) {
+            // update with current or previous parameters?
+            updateMovingAverage(paramsAvg_[idx], params_[idx], decay);
+          }
         },
         idx,
         pos));
@@ -69,9 +80,8 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
 
 void AsyncGraphGroup::updateMovingAverage(Tensor paramsAvg,
                                           Tensor params,
-                                          size_t batches) {
+                                          float decay) {
   using namespace functional;
-  float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
   Element(_1 = ((1.f - decay) * _1) + (decay * _2), paramsAvg, params);
 
 }

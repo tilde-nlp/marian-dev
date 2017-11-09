@@ -11,6 +11,14 @@ void Sgd::updateImpl(Tensor params, Tensor grads) {
   cudaStreamSynchronize(0);
 }
 
+void Sgd::elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha) {
+  using namespace functional;
+  if(alpha > 0)
+    Element(_1 -= alpha * (_1 - _2), params, center);
+  updateImpl(params, grads);
+}
+
+
 void Adagrad::updateImpl(Tensor params, Tensor grads) {
   if(!alloc_)
     alloc_ = New<TensorAllocator>(params->getDevice());
@@ -32,6 +40,13 @@ void Adagrad::updateImpl(Tensor params, Tensor grads) {
           grads);
 
   cudaStreamSynchronize(0);
+}
+
+void Adagrad::elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha) {
+  using namespace functional;
+  if(alpha > 0)
+    Element(_1 -= alpha * (_1 - _2), params, center);
+  updateImpl(params, grads);
 }
 
 void Adagrad::resetStats() {
@@ -71,6 +86,14 @@ void Adam::updateImpl(Tensor params, Tensor grads) {
 
   cudaStreamSynchronize(0);
 }
+
+void Adam::elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha) {
+  using namespace functional;
+  if(alpha > 0)
+    Element(_1 -= alpha * (_1 - _2), params, center);
+  updateImpl(params, grads);
+}
+
 
 void Adam::resetStats() {
   if(mt_)

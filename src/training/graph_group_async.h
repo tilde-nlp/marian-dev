@@ -52,7 +52,7 @@ private:
 
   void pushGradients(Tensor newGrads, size_t batch_words);
 
-  void updateMovingAverage(Tensor paramsAvg, Tensor params, size_t batches);
+  void updateMovingAverage(Tensor paramsAvg, Tensor params, float decay);
 
   void execute(Ptr<data::Batch> batch);
 

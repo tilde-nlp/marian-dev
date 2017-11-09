@@ -32,6 +32,29 @@ public:
     updateImpl(params, grads);
   }
 
+  void elasticUpdate(Ptr<ExpressionGraph> graph,
+                     Tensor center,
+                     float alpha = 0.0f,
+                     float multiplyFactor = 1.0f) {
+    Tensor p = graph->params()->vals();
+    Tensor g = graph->params()->grads();
+
+    elasticUpdate(p, g, center, alpha, multiplyFactor);
+  }
+
+  void elasticUpdate(Tensor params,
+                     Tensor grads,
+                     Tensor center,
+                     float alpha = 0.0f,
+                     float multiplyFactor = 1.0f) {
+    if(clipper_)
+      clipper_->clip(grads);
+
+    // In case we want to add a multiply factor to our learning rate
+    multiplyFactor_ = multiplyFactor;
+    elasticUpdateImpl(params, grads, center, alpha);
+  }
+
   virtual void actAfterEpoch(TrainingState& state) { eta_ = state.eta; }
   virtual void actAfterBatches(TrainingState& state) { eta_ = state.eta; }
   virtual void actAfterStalled(TrainingState& state) { eta_ = state.eta; }
@@ -40,6 +63,7 @@ public:
 
 protected:
   virtual void updateImpl(Tensor params, Tensor grads) = 0;
+  virtual void elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha = 0.0f) = 0;
   virtual void parseParams(const std::vector<float>& params) = 0;
 
   // Learning rate
@@ -57,6 +81,7 @@ public:
 
 private:
   void updateImpl(Tensor params, Tensor grads);
+  void elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha = 0.f);
 
   virtual void parseParams(const std::vector<float>& params) {}
 };
@@ -87,6 +112,7 @@ public:
 
 private:
   void updateImpl(Tensor params, Tensor grads);
+  void elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha = 0.f);
   void resetStats();
 
   virtual void parseParams(const std::vector<float>& params) {
@@ -108,6 +134,7 @@ public:
 
 private:
   void updateImpl(Tensor params, Tensor grads);
+  void elasticUpdateImpl(Tensor params, Tensor grads, Tensor center, float alpha = 0.f);
 
   virtual void actAfterEpoch(TrainingState& state) {
     OptimizerBase::actAfterEpoch(state);
