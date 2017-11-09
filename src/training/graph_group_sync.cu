@@ -14,9 +14,10 @@ void SyncGraphGroup::setScheduler(Ptr<Scheduler> scheduler) {
 
 void SyncGraphGroup::updateMovingAverage(Tensor paramsAvg,
                                          Tensor params,
-                                         size_t batches) {
+                                         size_t batches,
+                                         float decay) {
   using namespace functional;
-  float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+  //float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
   Element(_1 = ((1.f - decay) * _1) + (decay * _2), paramsAvg, params);
 }
 
@@ -82,20 +83,25 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
     if(movingAvg_ && paramsAvg_.size() == 0) {
       int totalSize = graphs_[0]->params()->vals()->size();
 
-      int i = 0;
-      for(auto device : devices_) {
-        int __size__ = min(shardSize_, totalSize);
-        totalSize -= __size__;
-        Tensor paramAvg;
-        auto allocator = New<TensorAllocator>(device);
+      int k = 0;
+      paramsAvg_.resize(decays_.size());
+      for(auto d : decays_) {
+        int i = 0;
+        for(auto device : devices_) {
+          int __size__ = min(shardSize_, totalSize);
+          totalSize -= __size__;
+          Tensor paramAvg;
+          auto allocator = New<TensorAllocator>(device);
 
-        allocator->reserveExact(__size__ * sizeof(float));
-        allocator->allocate(paramAvg, {1, __size__});
+          allocator->reserveExact(__size__ * sizeof(float));
+          allocator->allocate(paramAvg, {1, __size__});
 
-        paramAvg->copyFrom(params_[i++]);
+          paramAvg->copyFrom(params_[i++]);
 
-        paramsAllocAvg_.push_back(allocator);
-        paramsAvg_.push_back(paramAvg);
+          paramsAllocAvg_.push_back(allocator);
+          paramsAvg_[k].push_back(paramAvg);
+        }
+        k++;
       }
     }
 
@@ -140,9 +146,11 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
 
       shardOpt_[idx]->update(params_[idx], grads_[idx]);
 
-      if(movingAvg_)
-        updateMovingAverage(
-            paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
+      if(movingAvg_) {
+        int i = 0;
+        for(auto avg : paramsAvg_)
+          updateMovingAverage(avg[idx], params_[idx], scheduler_->numberOfBatches(), decays_[i++]);
+      }
 
       for(auto graph : graphs_) {
         auto subParam = graph->params()->vals()->subtensor(pos, size);
@@ -171,16 +179,21 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
     }
 
     if(scheduler_->validating()) {
-      if(movingAvg_)
-        for(auto graph : graphs_)
-          fetchParams(graph->params()->vals(), paramsAvg_);
+      if(movingAvg_) {
+        for(auto avg : paramsAvg_) {
+          for(auto graph : graphs_)
+            fetchParams(graph->params()->vals(), avg);
 
-      // safe, because all graphs are idle during validation with sync sgd
-      scheduler_->validate(graphs_);
+          // safe, because all graphs are idle during validation with sync sgd
+          scheduler_->validate(graphs_);
+        }
 
-      if(movingAvg_)
         for(auto graph : graphs_)
           fetchParams(graph->params()->vals(), params_);
+      }
+      else {
+        scheduler_->validate(graphs_);
+      }
     }
   }
 }
