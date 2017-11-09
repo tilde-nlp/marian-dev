@@ -25,7 +25,7 @@ void AsyncGraphGroup::fetchParams(Tensor oldParams,
           // individual mutex per-shard
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
           if(movingAvg_) {
-            //float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+            float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
             updateMovingAverage(params_[idx], paramsAvg_[idx], mvDecay_);
             updateMovingAverage(paramsAvg_[idx], params_[idx], mvDecay_);
           }
