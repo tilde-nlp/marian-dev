@@ -54,9 +54,11 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
             shardOpt_[idx]->update(params_[idx], grads_[idx]);
           }
 
-          if(movingAvg_)
-            updateMovingAverage(
-                paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
+          if(movingAvg_) {
+            int i = 0;
+            for(auto avg : paramsAvg_)
+              updateMovingAverage(avg[idx], params_[idx], scheduler_->numberOfBatches(), decays_[i++]);
+          }
         },
         idx,
         pos));
@@ -69,9 +71,10 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
 
 void AsyncGraphGroup::updateMovingAverage(Tensor paramsAvg,
                                           Tensor params,
-                                          size_t batches) {
+                                          size_t batches,
+                                          float decay) {
   using namespace functional;
-  float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+  //float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
   Element(_1 = ((1.f - decay) * _1) + (decay * _2), paramsAvg, params);
 
 }
@@ -122,16 +125,18 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
         grads_.push_back(grad_);
       }
     }
-    if(movingAvg_) {
-      if(paramsAvg_.size() == 0) {
-        int totalSize = graphs_[0]->params()->vals()->size();
 
+    if(movingAvg_ && paramsAvg_.size() == 0) {
+      int k = 0;
+      paramsAvg_.resize(decays_.size());
+      for(auto d : decays_) {
+        int totalSize = graphs_[0]->params()->vals()->size();
         int i = 0;
         for(auto device : devices_) {
           int __size__ = min(shardSize_, totalSize);
           totalSize -= __size__;
           Tensor paramAvg;
-          Ptr<TensorAllocator> allocator = New<TensorAllocator>(device);
+          auto allocator = New<TensorAllocator>(device);
 
           allocator->reserveExact(__size__ * sizeof(float));
           allocator->allocate(paramAvg, {1, __size__});
@@ -139,8 +144,9 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
           paramAvg->copyFrom(params_[i++]);
 
           paramsAllocAvg_.push_back(allocator);
-          paramsAvg_.push_back(paramAvg);
+          paramsAvg_[k].push_back(paramAvg);
         }
+        k++;
       }
     }
 
@@ -216,9 +222,7 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
       scheduler_->update(cost, batch);
 
       if(scheduler_->saving()) {
-        if(movingAvg_)
-          fetchParams(graph->params()->vals(), paramsAvg_);
-        this->save(graph);
+        this->save(); //TODO
       }
 
       if(scheduler_->validating()) {
@@ -227,10 +231,21 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
         // a safe state.
         pool_.wait_for_others(lock);
 
-        if(movingAvg_)
-          for(auto g : graphs_)
-            fetchParams(g->params()->vals(), paramsAvg_);
-        scheduler_->validate(graphs_);
+        if(movingAvg_) {
+          for(auto avg : paramsAvg_) {
+            for(auto graph : graphs_)
+              fetchParams(graph->params()->vals(), avg);
+
+            // safe, because all graphs are idle during validation with sync sgd
+            scheduler_->validate(graphs_);
+          }
+
+          for(auto graph : graphs_)
+            fetchParams(graph->params()->vals(), params_);
+        }
+        else {
+          scheduler_->validate(graphs_);
+        }
 
         // Validation is done, tell other threads to continue work.
         pool_.notify_others();

@@ -39,10 +39,10 @@ private:
 
   int shardSize_;
 
-  std::vector<Tensor> paramsAvg_;
+  std::vector<std::vector<Tensor>> paramsAvg_;
   std::vector<Ptr<TensorAllocator>> paramsAllocAvg_;
   bool movingAvg_{false};
-  float mvDecay_{1e-4};
+  std::vector<float> decays_{1, 5e-4, 1e-4, 5e-5};
 
   ThreadPool pool_;
 
@@ -52,7 +52,7 @@ private:
 
   void pushGradients(Tensor newGrads, size_t batch_words);
 
-  void updateMovingAverage(Tensor paramsAvg, Tensor params, size_t batches);
+  void updateMovingAverage(Tensor paramsAvg, Tensor params, size_t batches, float decay);
 
   void execute(Ptr<data::Batch> batch);
 
@@ -63,7 +63,6 @@ public:
         pool_{devices_.size(), devices_.size()},
         shardSync_{devices_.size()},
         movingAvg_{options_->get<float>("exponential-smoothing") > 0},
-        mvDecay_{options_->get<float>("exponential-smoothing")},
         tau_{options_->get<size_t>("optimizer-delay")} {
     for(auto device : devices_) {
       auto graph = New<ExpressionGraph>();
@@ -100,29 +99,63 @@ public:
         break;
       }
     }
+    if(movingAvg_) {
+      for(auto avg : paramsAvg_) {
+        int i = 0;
+        fetchParams(graphs_[idx]->params()->vals(), paramsAvg_[i]);
 
-    if(options_->get<bool>("overwrite")) {
-      std::string name = options_->get<std::string>("model");
+        if(options_->get<bool>("overwrite")) {
+          std::string name = options_->get<std::string>("model") + "avg" + std::to_string(decays_[i]) + ".npz";
 
-      builders_[idx]->save(graphs_[idx], name, true);
-      if(scheduler_)
-        scheduler_->save(name);
-    } else {
-      std::string name = options_->get<std::string>("model");
+          builders_[idx]->save(graphs_[idx], name, true);
+          if(scheduler_)
+            scheduler_->save(name);
+        }
+        else {
+          std::string name = options_->get<std::string>("model") + "avg" + std::to_string(decays_[i]) + ".npz";
 
-      if(!final) {
-        std::string numberOfBatches
-            = scheduler_ ? std::to_string(scheduler_->numberOfBatches())
-                         : "unknown";
-        std::string nameOverwrite = name;
-        nameOverwrite.replace(
-            name.size() - 4, 4, ".iter" + numberOfBatches + ".npz");
-        builders_[idx]->save(graphs_[idx], nameOverwrite);
+          if(!final) {
+            std::string numberOfBatches
+                = scheduler_ ? std::to_string(scheduler_->numberOfBatches())
+                             : "unknown";
+            std::string nameOverwrite = name;
+            nameOverwrite.replace(
+                name.size() - 4, 4, ".iter" + numberOfBatches + ".npz");
+            builders_[idx]->save(graphs_[idx], nameOverwrite);
+          }
+
+          builders_[idx]->save(graphs_[idx], name, true);
+          if(scheduler_)
+            scheduler_->save(name);
+        }
+
+        i++;
       }
+    }
+    else {
+      if(options_->get<bool>("overwrite")) {
+        std::string name = options_->get<std::string>("model");
 
-      builders_[idx]->save(graphs_[idx], name, true);
-      if(scheduler_)
-        scheduler_->save(name);
+        builders_[idx]->save(graphs_[idx], name, true);
+        if(scheduler_)
+          scheduler_->save(name);
+      } else {
+        std::string name = options_->get<std::string>("model");
+
+        if(!final) {
+          std::string numberOfBatches
+              = scheduler_ ? std::to_string(scheduler_->numberOfBatches())
+                           : "unknown";
+          std::string nameOverwrite = name;
+          nameOverwrite.replace(
+              name.size() - 4, 4, ".iter" + numberOfBatches + ".npz");
+          builders_[idx]->save(graphs_[idx], nameOverwrite);
+        }
+
+        builders_[idx]->save(graphs_[idx], name, true);
+        if(scheduler_)
+          scheduler_->save(name);
+      }
     }
   }
 
