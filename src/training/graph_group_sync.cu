@@ -81,11 +81,10 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
     }
 
     if(movingAvg_ && paramsAvg_.size() == 0) {
-      int totalSize = graphs_[0]->params()->vals()->size();
-
       int k = 0;
       paramsAvg_.resize(decays_.size());
       for(auto d : decays_) {
+        int totalSize = graphs_[0]->params()->vals()->size();
         int i = 0;
         for(auto device : devices_) {
           int __size__ = min(shardSize_, totalSize);
