@@ -100,19 +100,19 @@ public:
       }
     }
     if(movingAvg_) {
+      int i = 0;
       for(auto avg : paramsAvg_) {
-        int i = 0;
         fetchParams(graphs_[idx]->params()->vals(), paramsAvg_[i]);
 
         if(options_->get<bool>("overwrite")) {
-          std::string name = options_->get<std::string>("model") + "avg" + std::to_string(decays_[i]) + ".npz";
+          std::string name = options_->get<std::string>("model") + ".avg" + std::to_string(decays_[i]) + ".npz";
 
           builders_[idx]->save(graphs_[idx], name, true);
           if(scheduler_)
             scheduler_->save(name);
         }
         else {
-          std::string name = options_->get<std::string>("model") + "avg" + std::to_string(decays_[i]) + ".npz";
+          std::string name = options_->get<std::string>("model") + ".avg" + std::to_string(decays_[i]) + ".npz";
 
           if(!final) {
             std::string numberOfBatches
@@ -128,7 +128,6 @@ public:
           if(scheduler_)
             scheduler_->save(name);
         }
-
         i++;
       }
     }

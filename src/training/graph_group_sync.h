@@ -79,8 +79,8 @@ public:
     }
 
     if(movingAvg_) {
+      int i = 0;
       for(auto avg : paramsAvg_) {
-        int i = 0;
         fetchParams(graphs_[idx]->params()->vals(), paramsAvg_[i]);
 
         if(options_->get<bool>("overwrite")) {
