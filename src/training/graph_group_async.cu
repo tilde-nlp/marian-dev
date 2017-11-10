@@ -148,7 +148,7 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
           allocator->allocate(paramAvg, {1, __size__});
           allocator->allocate(paramAvgPrev, {1, __size__});
 
-          paramAvg->copyFrom(params_[i++]);
+          paramAvg->copyFrom(params_[i]);
           paramAvgPrev->copyFrom(params_[i++]);
 
           paramsAllocAvg_.push_back(allocator);
