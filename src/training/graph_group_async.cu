@@ -24,16 +24,7 @@ void AsyncGraphGroup::fetchParams(Tensor oldParams,
         [&](int idx, int pos) {
           // individual mutex per-shard
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
-
           auto oldTensor = oldParams->subtensor(pos, params[idx]->size());
-
-          if(movingAvg_) {
-            // update with current or previous parameters?
-            size_t batches = scheduler_->numberOfBatches();
-            float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
-            updateMovingAverage(paramsAvg_[idx], oldTensor, decay);
-          }
-
           oldTensor->copyFrom(params[idx]);
         },
         idx,
@@ -46,7 +37,9 @@ void AsyncGraphGroup::fetchParams(Tensor oldParams,
   }
 }
 
-void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
+void AsyncGraphGroup::pushGradients(Tensor newGrads,
+                                    Tensor currentParams,
+                                    size_t batch_words) {
   // add instead of copy?
   std::vector<std::thread> threads;
   int pos = 0;
@@ -63,10 +56,14 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
             if(movingAvg_) {
               size_t batches = scheduler_->numberOfBatches();
               float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+
+              // potentially needs to copy params back here from graph
+              updateMovingAverage(paramsAvg_[idx], params_[idx], decay);
               shardOpt_[idx]->elasticUpdate(params_[idx],
                                             grads_[idx],
-                                            paramsAvg_[idx],
+                                            paramsAvgPrev_[idx],
                                             decay);
+              paramsAvgPrev_[idx]->copyFrom(paramsAvg_[idx]);
             }
             else {
               shardOpt_[idx]->update(params_[idx], grads_[idx]);
@@ -144,16 +141,19 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
         for(auto device : devices_) {
           int __size__ = min(shardSize_, totalSize);
           totalSize -= __size__;
-          Tensor paramAvg;
-          Ptr<TensorAllocator> allocator = New<TensorAllocator>(device);
+          Tensor paramAvg, paramAvgPrev;
 
-          allocator->reserveExact(__size__ * sizeof(float));
+          Ptr<TensorAllocator> allocator = New<TensorAllocator>(device);
+          allocator->reserveExact(2 * __size__ * sizeof(float));
           allocator->allocate(paramAvg, {1, __size__});
+          allocator->allocate(paramAvgPrev, {1, __size__});
 
           paramAvg->copyFrom(params_[i++]);
+          paramAvgPrev->copyFrom(params_[i++]);
 
           paramsAllocAvg_.push_back(allocator);
           paramsAvg_.push_back(paramAvg);
+          paramsAvgPrev_.push_back(paramAvgPrev);
         }
       }
     }
@@ -213,7 +213,7 @@ void AsyncGraphGroup::execute(Ptr<data::Batch> batch) {
     t++;
 
     if(t % tau_ == 0) {
-      pushGradients(gradients, num_seen_words);
+      pushGradients(gradients, graph->params()->vals(), num_seen_words);
       // Reset the counter of seen words after gradient update
       num_seen_words = 0;
 

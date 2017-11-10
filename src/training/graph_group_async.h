@@ -40,6 +40,7 @@ private:
   int shardSize_;
 
   std::vector<Tensor> paramsAvg_;
+  std::vector<Tensor> paramsAvgPrev_;
   std::vector<Ptr<TensorAllocator>> paramsAllocAvg_;
   bool movingAvg_{false};
   float mvDecay_{1e-4};
@@ -50,7 +51,7 @@ private:
 
   void fetchParams(Tensor oldParams, const std::vector<Tensor>& params);
 
-  void pushGradients(Tensor newGrads, size_t batch_words);
+  void pushGradients(Tensor newGrads, Tensor currentParams, size_t batch_words);
 
   void updateMovingAverage(Tensor paramsAvg, Tensor params, float decay);
 
