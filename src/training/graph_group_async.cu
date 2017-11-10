@@ -24,7 +24,17 @@ void AsyncGraphGroup::fetchParams(Tensor oldParams,
         [&](int idx, int pos) {
           // individual mutex per-shard
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
-          oldParams->subtensor(pos, params[idx]->size())->copyFrom(params[idx]);
+
+          auto oldTensor = oldParams->subtensor(pos, params[idx]->size());
+
+          if(movingAvg_) {
+            // update with current or previous parameters?
+            size_t batches = scheduler_->numberOfBatches();
+            float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+            updateMovingAverage(paramsAvg_[idx], oldTensor, decay);
+          }
+
+          oldTensor->copyFrom(params[idx]);
         },
         idx,
         pos));
@@ -47,13 +57,12 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
           std::lock_guard<std::mutex> guard(shardSync_[idx]);
           grads_[idx]->copyFrom(newGrads->subtensor(pos, grads_[idx]->size()));
 
-          float decay = 0;
           if(scaleLearningRate_) {
             shardOpt_[idx]->update(params_[idx], grads_[idx], batch_words / avgBatchWords_);
           } else {
             if(movingAvg_) {
               size_t batches = scheduler_->numberOfBatches();
-              decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
+              float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
               shardOpt_[idx]->elasticUpdate(params_[idx],
                                             grads_[idx],
                                             paramsAvg_[idx],
@@ -62,11 +71,6 @@ void AsyncGraphGroup::pushGradients(Tensor newGrads, size_t batch_words) {
             else {
               shardOpt_[idx]->update(params_[idx], grads_[idx]);
             }
-          }
-
-          if(movingAvg_) {
-            // update with current or previous parameters?
-            updateMovingAverage(paramsAvg_[idx], params_[idx], decay);
           }
         },
         idx,
