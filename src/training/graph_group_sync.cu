@@ -17,8 +17,8 @@ void SyncGraphGroup::updateMovingAverage(Tensor paramsAvg,
                                          size_t batches,
                                          float decay) {
   using namespace functional;
-  //float decay = std::max(mvDecay_, 1.f - (float)(batches + 1) / (float)(batches + 10));
-  Element(_1 = ((1.f - decay) * _1) + (decay * _2), paramsAvg, params);
+  float decay2 = std::max(decay, 1.f - (float)(batches + 1) / (float)(batches + 10));
+  Element(_1 = ((1.f - decay2) * _1) + (decay2 * _2), paramsAvg, params);
 }
 
 void SyncGraphGroup::fetchParams(Tensor oldParams,
