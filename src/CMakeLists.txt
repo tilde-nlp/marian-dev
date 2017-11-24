@@ -44,6 +44,13 @@ cuda_add_library(marian
   data/text_input.cpp
   rescorer/score_collector.cpp
   $<TARGET_OBJECTS:libyaml-cpp>
+  3rd_party/nccl/all_gather.cu
+  3rd_party/nccl/all_reduce.cu
+  3rd_party/nccl/broadcast.cu
+  3rd_party/nccl/core.cu
+  3rd_party/nccl/libwrap.cu
+  3rd_party/nccl/reduce.cu
+  3rd_party/nccl/reduce_scatter.cu
   STATIC
 )
 

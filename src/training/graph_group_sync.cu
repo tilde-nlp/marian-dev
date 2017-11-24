@@ -1,5 +1,6 @@
 #include "kernels/tensor_operators.h"
 #include "training/graph_group_sync.h"
+#include "3rd_party/nccl/nccl.h"
 
 namespace marian {
 
@@ -126,14 +127,34 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
     auto task = [this, batches](size_t idx, int pos) {
       grads_[idx]->set(0);
       int size = params_[idx]->size();
+
+      std::vector<int> devices;
+      for(auto d : devices_)
+        devices.push_back(d);
+
+      ncclComm_t comms[devices.size()];
+      ncclCommInitAll(comms, devices.size(), devices.data());
+
+      //for(auto graph : graphs_) {
+      //  if(batches[i]->size() > 0) {
+      //    auto subGrad = graph->params()->grads()->subtensor(pos, size);
+      //    tmpTensors_[idx]->copyFrom(subGrad);
+      //
+      //    using namespace functional;
+      //    Element(_1 = _1 + _2, grads_[idx], tmpTensors_[idx]);
+      //  }
+      //  i++;
+      //}
+
       int i = 0;
       for(auto graph : graphs_) {
         if(batches[i]->size() > 0) {
+          cudaSetDevice(graph->getDevice());
           auto subGrad = graph->params()->grads()->subtensor(pos, size);
-          tmpTensors_[idx]->copyFrom(subGrad);
+          auto send = subGrad->data();
+          auto recv = graph->getDevice() == idx ? grads_[idx]->data() : 0;
 
-          using namespace functional;
-          Element(_1 = _1 + _2, grads_[idx], tmpTensors_[idx]);
+          ncclReduce(send, recv, size, ncclFloat, ncclSum, idx, comms[i], 0);
         }
         i++;
       }
@@ -141,8 +162,8 @@ void SyncGraphGroup::execute(Ptr<data::Batch> batch) {
       shardOpt_[idx]->update(params_[idx], grads_[idx]);
 
       if(movingAvg_)
-        updateMovingAverage(
-            paramsAvg_[idx], params_[idx], scheduler_->numberOfBatches());
+        updateMovingAverage(paramsAvg_[idx], params_[idx],
+                            scheduler_->numberOfBatches());
 
       for(auto graph : graphs_) {
         auto subParam = graph->params()->vals()->subtensor(pos, size);

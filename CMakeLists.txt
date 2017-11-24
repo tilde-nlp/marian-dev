@@ -36,6 +36,8 @@ else(CMAKE_BUILD_TYPE STREQUAL "Debug")
   list(APPEND CUDA_NVCC_FLAGS -std=c++11; --default-stream per-thread; -O3; --use_fast_math; -Xcompiler '-fPIC'; -arch=sm_30; -gencode=arch=compute_30,code=sm_30; -gencode=arch=compute_50,code=sm_50; -gencode=arch=compute_52,code=sm_52; -gencode=arch=compute_60,code=sm_60; -gencode=arch=compute_61,code=sm_61; -gencode=arch=compute_61,code=compute_61 ;)
 endif(CMAKE_BUILD_TYPE STREQUAL "Debug")
 
+list(APPEND CUDA_NVCC_FLAGS --compiler-options "-DNCCL_MAJOR=1 -DNCCL_MINOR=3 -DNCCL_PATCH=5 -DCUDA_MAJOR=9 -DCUDA_MINOR=0")
+
 list(REMOVE_DUPLICATES CUDA_NVCC_FLAGS)
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
