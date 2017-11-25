@@ -151,7 +151,7 @@ public:
                         scalar_))};
   }
 
-  const std::string type() { return "•"; }
+  const std::string type() { return "dot"; }
 
   const std::string color() { return "orange"; }
 };
@@ -363,7 +363,7 @@ public:
                            scalar_))};
   }
 
-  const std::string type() { return "•"; }
+  const std::string type() { return "bdot"; }
 
   const std::string color() { return "orange"; }
 };
@@ -475,7 +475,7 @@ struct MultNodeOp : public ElementBinaryNodeOp {
             NodeOp(Add(_1 * _2, child(1)->grad(), adj_, child(0)->val()))};
   }
 
-  const std::string type() { return "×"; }
+  const std::string type() { return "mult"; }
 };
 
 struct DivNodeOp : public ElementBinaryNodeOp {
@@ -501,7 +501,7 @@ struct DivNodeOp : public ElementBinaryNodeOp {
                    child(1)->val()))};
   }
 
-  const std::string type() { return "÷"; }
+  const std::string type() { return "div"; }
 };
 
 // struct PowNodeOp : public ElementBinaryNodeOp {

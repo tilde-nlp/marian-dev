@@ -6,6 +6,8 @@
 #include "kernels/cuda_helpers.h"
 #include "kernels/tensor_operators.h"
 #include "tensors/tensor.h"
+#include "3rd_party/cnpy/cnpy.h"
+
 
 namespace marian {
 
@@ -71,6 +73,26 @@ void TensorBase::copyFrom(Tensor in) {
                         in->size() * sizeof(float),
                         cudaMemcpyDefault));
   cudaStreamSynchronize(0);
+}
+
+void TensorBase::save(const std::string& file,
+                      const std::string& name,
+                      const std::string& mode) {
+  cudaSetDevice(device_);
+  assert(shape_.size());
+
+  size_t totSize = shape_.elements();
+  std::vector<float> values(totSize);
+  get(values);
+
+  unsigned dim = shape_.size();
+  unsigned* shape = new unsigned[dim];
+  for(int i = 0; i < dim; ++i)
+    shape[i] = shape_[i];
+
+  cnpy::npz_save(file, name, values.data(), shape, dim, mode);
+
+  delete[] shape;
 }
 
 std::string TensorBase::debug() {
@@ -157,4 +179,5 @@ Tensor operator>>(Tensor t, std::vector<float> &v) {
   t->get(v);
   return t;
 }
+
 }

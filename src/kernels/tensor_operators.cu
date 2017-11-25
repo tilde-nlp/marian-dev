@@ -4,6 +4,10 @@
 
 #include "3rd_party/reduce_all.h"
 
+#include <thrust/transform_reduce.h>
+#include <thrust/device_ptr.h>
+
+
 namespace marian {
 
 #define CUDA_FLT_MAX 1.70141e+38
@@ -22,14 +26,15 @@ __device__ inline float stableLogit(float x) {
   }
 }
 
+
 bool IsNan(Tensor in) {
-  //cudaSetDevice(in->getDevice());
-  //thrust::device_ptr<float> begin = thrust::device_pointer_cast(in->data());
-  //thrust::device_ptr<float> end
-  //    = thrust::device_pointer_cast(in->data() + in->size());
-  //return thrust::transform_reduce(
-  //    begin, end, isnan_test(), 0, thrust::plus<bool>());
-  return false;
+  cudaSetDevice(in->getDevice());
+  thrust::device_ptr<float> begin = thrust::device_pointer_cast(in->data());
+  thrust::device_ptr<float> end
+      = thrust::device_pointer_cast(in->data() + in->size());
+  return thrust::transform_reduce(
+      begin, end, isnan_test(), 0, thrust::plus<bool>());
+  //return false;
 }
 
 void ConcatCont(Tensor out, const std::vector<Tensor>& inputs, int axis) {
@@ -572,9 +577,11 @@ void Prod(cublasHandle_t handle,
   cublasOperation_t opB = transB ? CUBLAS_OP_T : CUBLAS_OP_N;
 
 #if CUDA_VERSION >= 9000
-  cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
+  //cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
 #endif
-  cublasSgemm(handle,
+
+  cublasStatus_t stat;
+  stat = cublasSgemm(handle,
               opB,
               opA,
               n,
@@ -588,8 +595,22 @@ void Prod(cublasHandle_t handle,
               &beta,
               C->data(),
               ldc);
+
+  ABORT_IF(stat != CUBLAS_STATUS_SUCCESS, "CUBLAS_ERROR {}", stat);
+
+  //if(IsNan(C)) {
+  //  A->save("nan.npz", "A");
+  //  B->save("nan.npz", "B", "a");
+  //  C->save("nan.npz", "C", "a");
+  //  ABORT("Found Nan");
+  //}
+
+  //ABORT_IF(IsNan(A), "A is NaN: {}", A->debug());
+  //ABORT_IF(IsNan(B), "B is NaN: {}", B->debug());
+  //ABORT_IF(IsNan(C), "C is NaN: {}", C->debug());
+
 #if CUDA_VERSION >= 9000
-  cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
+  //cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
 #endif
 }
 

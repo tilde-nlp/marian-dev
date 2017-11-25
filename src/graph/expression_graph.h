@@ -482,43 +482,7 @@ public:
           pName = pName.substr(namespace_.size() + 2);
       }
 
-      std::vector<float> v;
-      p.second->val() >> v;
-      auto& pShape = p.second->shape();
-
-      unsigned dim = pShape.size();
-      unsigned* shape = new unsigned[dim];
-      for(int i = 0; i < dim; ++i)
-        shape[i] = pShape[i];
-
-      cnpy::npz_save(name, pName, v.data(), shape, dim, mode);
-
-      delete[] shape;
-
-      //auto ps = p.second->shape();
-      //if(ps[0] == 1 && ps[2] == 1 && ps[3] == 1) {
-      //  shape[0] = ps[1];
-      //  dim = 1;
-      //  cnpy::npz_save(name, pName, v.data(), shape, dim, mode);
-      //} else if(ps[2] == 1 && ps[3] == 1) {
-      //  shape[0] = ps[0];
-      //  shape[1] = ps[1];
-      //  dim = 2;
-      //  cnpy::npz_save(name, pName, v.data(), shape, dim, mode);
-      //} else if(ps[3] == 1) {
-      //  shape[0] = ps[0];
-      //  shape[1] = ps[1];
-      //  shape[2] = ps[2];
-      //  dim = 3;
-      //  cnpy::npz_save(name, pName, v.data(), shape, dim, mode);
-      //} else {
-      //  shape[0] = ps[0];
-      //  shape[1] = ps[1];
-      //  shape[2] = ps[2];
-      //  shape[3] = ps[3];
-      //  dim = 4;
-      //  cnpy::npz_save(name, pName, v.data(), shape, dim, mode);
-      //}
+      p.second->val()->save(name, pName, mode);
       mode = "a";
     }
   }

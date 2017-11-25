@@ -62,6 +62,10 @@ public:
   void copyFrom(Tensor);
 
   std::string debug();
+
+  void save(const std::string& file,
+            const std::string& name,
+            const std::string& mode = "w");
 };
 
 typedef std::shared_ptr<TensorBase> Tensor;
