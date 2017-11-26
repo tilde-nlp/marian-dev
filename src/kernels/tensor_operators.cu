@@ -649,7 +649,7 @@ void ProdBatched(cublasHandle_t handle,
   cublasOperation_t opB = transB ? CUBLAS_OP_T : CUBLAS_OP_N;
 
 #if CUDA_VERSION >= 9000
-  cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
+  //cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
 #endif
   cublasSgemmStridedBatched(handle,
                             opB,
@@ -670,7 +670,7 @@ void ProdBatched(cublasHandle_t handle,
                             n * m,
                             std::max(batchA, batchB));
 #if CUDA_VERSION >= 9000
-  cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
+  //cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
 #endif
 }
 
