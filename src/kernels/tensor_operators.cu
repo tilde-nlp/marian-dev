@@ -3,17 +3,15 @@
 #include "kernels/tensor_operators.h"
 
 #include "3rd_party/reduce_all.h"
-
 #include <thrust/transform_reduce.h>
 #include <thrust/device_ptr.h>
-
 
 namespace marian {
 
 #define CUDA_FLT_MAX 1.70141e+38
 
 struct isnan_test {
-  __host__ __device__ bool operator()(const float a) const { return isnan(a); }
+  __host__ __device__ bool operator()(const float a) const { return isnan(a) || isinf(a); }
 };
 
 __device__ inline float stableLogit(float x) {
@@ -25,7 +23,6 @@ __device__ inline float stableLogit(float x) {
     return z / (1.0 + z);
   }
 }
-
 
 bool IsNan(Tensor in) {
   cudaSetDevice(in->getDevice());
@@ -579,9 +576,7 @@ void Prod(cublasHandle_t handle,
 #if CUDA_VERSION >= 9000
   //cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
 #endif
-
-  cublasStatus_t stat;
-  stat = cublasSgemm(handle,
+  cublasSgemm(handle,
               opB,
               opA,
               n,
@@ -596,18 +591,10 @@ void Prod(cublasHandle_t handle,
               C->data(),
               ldc);
 
-  ABORT_IF(stat != CUBLAS_STATUS_SUCCESS, "CUBLAS_ERROR {}", stat);
-
-  //if(IsNan(C)) {
-  //  A->save("nan.npz", "A");
-  //  B->save("nan.npz", "B", "a");
-  //  C->save("nan.npz", "C", "a");
-  //  ABORT("Found Nan");
-  //}
-
   //ABORT_IF(IsNan(A), "A is NaN: {}", A->debug());
   //ABORT_IF(IsNan(B), "B is NaN: {}", B->debug());
   //ABORT_IF(IsNan(C), "C is NaN: {}", C->debug());
+
 
 #if CUDA_VERSION >= 9000
   //cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
@@ -1689,6 +1676,20 @@ void LayerNormalizationGrad(Tensor gradX,
       rows,
       cols,
       eps);
+
+  //std::cerr << "gamma " << gamma->debug() << std::endl;
+  //std::cerr << "gamma grad" << gradGamma->debug() << std::endl;
+  //
+  //std::cerr << "x " << x->debug() << std::endl;
+  //std::cerr << "x grad " << gradX->debug() << std::endl;
+  //
+  //std::cerr << "adj " << adj->debug() << std::endl;
+
+  ABORT_IF(IsNan(gradX), "gradX is NaN");
+
+  //ABORT_IF(IsNan(B), "B is NaN: {}", B->debug());
+  //ABORT_IF(IsNan(C), "C is NaN: {}", C->debug());
+
 }
 
 __global__ void gShift(float* out, const float* in, int length, int offset) {

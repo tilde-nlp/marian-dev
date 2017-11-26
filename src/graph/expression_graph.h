@@ -45,7 +45,7 @@ private:
   bool reloaded_{false};
   std::string namespace_;
 
-  bool throwNaN_{false};
+  bool throwNaN_{true};
 
 protected:
   // Delete, copy and move constructors
@@ -202,7 +202,9 @@ public:
       if(v->trainable())
         v->backward();
 
-      checkNan(v->grad());
+      for(auto child : v->children())
+        if(child->trainable())
+          checkNan(v->grad());
 
       if(v->trainable() && v->marked_for_debug()) {
         std::cerr << "Debug Grad: " << v->debug_message() << std::endl;
