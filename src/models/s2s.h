@@ -31,13 +31,14 @@ public:
     using namespace keywords;
     float dropoutRnn = inference_ ? 0 : opt<float>("dropout-rnn");
 
-    auto rnnFw = rnn::rnn(graph)                                   //
-        ("type", opt<std::string>("enc-cell"))                     //
-        ("direction", forward)                                     //
-        ("dimInput", opt<int>("dim-emb"))                          //
-        ("dimState", opt<int>("dim-rnn"))                          //
-        ("dropout", dropoutRnn)                                    //
-        ("layer-normalization", opt<bool>("layer-normalization"))  //
+    auto rnnFw = rnn::rnn(graph)                                            //
+        ("type", opt<std::string>("enc-cell"))                              //
+        ("direction", forward)                                              //
+        ("dimInput", opt<int>("dim-emb"))                                   //
+        ("dimState", opt<int>("dim-rnn"))                                   //
+        ("dropout", dropoutRnn)                                             //
+        ("layer-normalization", opt<bool>("layer-normalization"))           //
+        ("layer-normalization-eps", opt<float>("layer-normalization-eps"))  //
         ("skip", opt<bool>("skip"));
 
     for(int i = 1; i <= first; ++i) {
@@ -57,13 +58,14 @@ public:
       rnnFw.push_back(stacked);
     }
 
-    auto rnnBw = rnn::rnn(graph)                                   //
-        ("type", opt<std::string>("enc-cell"))                     //
-        ("direction", backward)                                    //
-        ("dimInput", opt<int>("dim-emb"))                          //
-        ("dimState", opt<int>("dim-rnn"))                          //
-        ("dropout", dropoutRnn)                                    //
-        ("layer-normalization", opt<bool>("layer-normalization"))  //
+    auto rnnBw = rnn::rnn(graph)                                            //
+        ("type", opt<std::string>("enc-cell"))                              //
+        ("direction", backward)                                             //
+        ("dimInput", opt<int>("dim-emb"))                                   //
+        ("dimState", opt<int>("dim-rnn"))                                   //
+        ("dropout", dropoutRnn)                                             //
+        ("layer-normalization", opt<bool>("layer-normalization"))           //
+        ("layer-normalization-eps", opt<float>("layer-normalization-eps"))  //
         ("skip", opt<bool>("skip"));
 
     for(int i = 1; i <= first; ++i) {
@@ -92,12 +94,13 @@ public:
       // previous bidirectional RNN through multiple layers
 
       // construct RNN first
-      auto rnnUni = rnn::rnn(graph)                                  //
-          ("type", opt<std::string>("enc-cell"))                     //
-          ("dimInput", 2 * opt<int>("dim-rnn"))                      //
-          ("dimState", opt<int>("dim-rnn"))                          //
-          ("dropout", dropoutRnn)                                    //
-          ("layer-normalization", opt<bool>("layer-normalization"))  //
+      auto rnnUni = rnn::rnn(graph)                                          //
+          ("type", opt<std::string>("enc-cell"))                             //
+          ("dimInput", 2 * opt<int>("dim-rnn"))                              //
+          ("dimState", opt<int>("dim-rnn"))                                  //
+          ("dropout", dropoutRnn)                                            //
+          ("layer-normalization", opt<bool>("layer-normalization"))          //
+          ("layer-normalization-eps", opt<float>("layer-normalization-eps")) //
           ("skip", opt<bool>("skip"));
 
       for(int i = first + 1; i <= second + first; ++i) {
@@ -176,15 +179,16 @@ private:
   Ptr<rnn::RNN> constructDecoderRNN(Ptr<ExpressionGraph> graph,
                                     Ptr<DecoderState> state) {
     float dropoutRnn = inference_ ? 0 : opt<float>("dropout-rnn");
-    auto rnn = rnn::rnn(graph)                                     //
-        ("type", opt<std::string>("dec-cell"))                     //
-        ("dimInput", opt<int>("dim-emb"))                          //
-        ("dimState", opt<int>("dim-rnn"))                          //
-        ("dropout", dropoutRnn)                                    //
-        ("layer-normalization", opt<bool>("layer-normalization"))  //
+    auto rnn = rnn::rnn(graph)                                              //
+        ("type", opt<std::string>("dec-cell"))                              //
+        ("dimInput", opt<int>("dim-emb"))                                   //
+        ("dimState", opt<int>("dim-rnn"))                                   //
+        ("dropout", dropoutRnn)                                             //
+        ("layer-normalization", opt<bool>("layer-normalization"))           //
+        ("layer-normalization-eps", opt<float>("layer-normalization-eps"))  //
         ("nematus-normalization",
          options_->has("original-type")
-             && opt<std::string>("original-type") == "nematus")  //
+             && opt<std::string>("original-type") == "nematus")             //
         ("skip", opt<bool>("skip"));
 
     size_t decoderLayers = opt<size_t>("dec-depth");
@@ -256,14 +260,15 @@ public:
     if(!meanContexts.empty()) {
       // apply single layer network to mean to map into decoder space
       auto mlp = mlp::mlp(graph).push_back(
-          mlp::dense(graph)                                          //
-          ("prefix", prefix_ + "_ff_state")                          //
-          ("dim", opt<int>("dim-rnn"))                               //
-          ("activation", mlp::act::tanh)                             //
-          ("layer-normalization", opt<bool>("layer-normalization"))  //
+          mlp::dense(graph)                                                  //
+          ("prefix", prefix_ + "_ff_state")                                  //
+          ("dim", opt<int>("dim-rnn"))                                       //
+          ("activation", mlp::act::tanh)                                     //
+          ("layer-normalization", opt<bool>("layer-normalization"))          //
+          ("layer-normalization-eps", opt<float>("layer-normalization-eps")) //
           ("nematus-normalization",
            options_->has("original-type")
-               && opt<std::string>("original-type") == "nematus")  //
+               && opt<std::string>("original-type") == "nematus")            //
           );
       start = mlp->apply(meanContexts);
     } else {
@@ -321,11 +326,12 @@ public:
       alignedContext = alignedContexts[0];
 
     // construct deep output multi-layer network layer-wise
-    auto layer1 = mlp::dense(graph)                                //
-        ("prefix", prefix_ + "_ff_logit_l1")                       //
-        ("dim", opt<int>("dim-emb"))                               //
-        ("activation", mlp::act::tanh)                             //
-        ("layer-normalization", opt<bool>("layer-normalization"))  //
+    auto layer1 = mlp::dense(graph)                                         //
+        ("prefix", prefix_ + "_ff_logit_l1")                                //
+        ("dim", opt<int>("dim-emb"))                                        //
+        ("activation", mlp::act::tanh)                                      //
+        ("layer-normalization", opt<bool>("layer-normalization"))           //
+        ("layer-normalization-eps", opt<float>("layer-normalization-eps"))  //
         ("nematus-normalization",
          options_->has("original-type")
              && opt<std::string>("original-type") == "nematus");

@@ -68,6 +68,8 @@ public:
     auto dim = opt<int>("dim");
 
     auto layerNorm = opt<bool>("layer-normalization", false);
+    auto layerNormEps = opt<float>("layer-normalization-eps", 1e-9);
+
     auto nematusNorm = opt<bool>("nematus-normalization", false);
     auto activation = opt<act>("activation", act::linear);
 
@@ -114,7 +116,7 @@ public:
                                 keywords::init = inits::from_value(1.0));
 
           params_.push_back(gamma);
-          outputs.push_back(layer_norm(dot(in, W), gamma, b));
+          outputs.push_back(layer_norm(dot(in, W), gamma, b, layerNormEps));
         }
 
       } else {
@@ -142,6 +144,8 @@ public:
     auto dim = options_->get<int>("dim");
 
     auto layerNorm = options_->get<bool>("layer-normalization", false);
+    auto layerNormEps = opt<float>("layer-normalization-eps", 1e-9);
+    
     auto nematusNorm = opt<bool>("nematus-normalization", false);
     auto activation = options_->get<act>("activation", act::linear);
 
@@ -177,7 +181,7 @@ public:
             name + "_gamma", {1, dim}, keywords::init = inits::from_value(1.0));
 
         params_.push_back(gamma);
-        out = layer_norm(dot(input, W), gamma, b);
+        out = layer_norm(dot(input, W), gamma, b, layerNormEps);
       }
     } else {
       out = affine(input, W, b);

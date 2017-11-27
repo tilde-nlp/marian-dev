@@ -23,6 +23,8 @@ private:
   Expr gamma2_;
 
   bool layerNorm_;
+  float layerNormEps_;
+
   float dropout_;
 
   Expr dropMaskX_;
@@ -35,6 +37,7 @@ public:
     std::string prefix = options_->get<std::string>("prefix");
 
     layerNorm_ = options_->get<bool>("layer-normalization", false);
+    layerNormEps_ = opt<float>("layer-normalization-eps", 1e-9);
     dropout_ = options_->get<float>("dropout", 0);
 
     U_ = graph->param(prefix + "_U",
@@ -85,7 +88,7 @@ public:
     auto xW = dot(input, W_);
 
     if(layerNorm_)
-      xW = layer_norm(xW, gamma1_);
+      xW = layer_norm(xW, gamma1_, nullptr, layerNormEps_);
 
     return {xW};
   }
@@ -98,7 +101,7 @@ public:
       stateDropped = dropout(recState, keywords::mask = dropMaskS_);
     auto sU = dot(stateDropped, U_);
     if(layerNorm_)
-      sU = layer_norm(sU, gamma2_);
+      sU = layer_norm(sU, gamma2_, nullptr, layerNormEps_);
 
     Expr output;
     if(xWs.empty())
@@ -127,6 +130,8 @@ protected:
 
   bool final_;
   bool layerNorm_;
+  float layerNormEps_;
+
   float dropout_;
 
   Expr dropMaskX_;
@@ -141,6 +146,8 @@ public:
     std::string prefix = opt<std::string>("prefix");
 
     layerNorm_ = opt<bool>("layer-normalization", false);
+    layerNormEps_ = opt<float>("layer-normalization-eps", 1e-9);
+
     dropout_ = opt<float>("dropout", 0);
     final_ = opt<bool>("final", false);
 
@@ -213,7 +220,7 @@ public:
 
     auto xW = dot(input, W_);
     if(layerNorm_)
-      xW = layer_norm(xW, gamma1_);
+      xW = layer_norm(xW, gamma1_, nullptr, layerNormEps_);
 
     return {xW};
   }
@@ -228,7 +235,7 @@ public:
 
     auto sU = dot(stateDropped, U_);
     if(layerNorm_)
-      sU = layer_norm(sU, gamma2_);
+      sU = layer_norm(sU, gamma2_, nullptr, layerNormEps_);
 
     Expr xW;
     if(xWs.empty()) {
@@ -297,6 +304,7 @@ public:
     transition_ = opt<bool>("transition", false);
 
     layerNorm_ = opt<bool>("layer-normalization", false);
+
     dropout_ = opt<float>("dropout", 0);
     final_ = opt<bool>("final", false);
 
@@ -499,6 +507,8 @@ protected:
   Expr gamma2_;
 
   bool layerNorm_;
+  float layerNormEps_;
+
   float dropout_;
 
   Expr dropMaskX_;
@@ -513,6 +523,7 @@ public:
     std::string prefix = opt<std::string>("prefix");
 
     layerNorm_ = opt<bool>("layer-normalization", false);
+    layerNormEps_ = opt<float>("layer-normalization-eps", 1e-9);
     dropout_ = opt<float>("dropout", 0);
 
     U_ = graph->param(prefix + "_U",
@@ -565,7 +576,7 @@ public:
     auto xW = dot(input, W_);
 
     if(layerNorm_)
-      xW = layer_norm(xW, gamma1_);
+      xW = layer_norm(xW, gamma1_, nullptr, layerNormEps_);
 
     return {xW};
   }
@@ -583,7 +594,7 @@ public:
     auto sU = dot(recStateDropped, U_);
 
     if(layerNorm_)
-      sU = layer_norm(sU, gamma2_);
+      sU = layer_norm(sU, gamma2_, nullptr, layerNormEps_);
 
     Expr xW;
     if(xWs.empty()) {
@@ -656,7 +667,7 @@ public:
     auto xWs = CellType::applyInput({input});
     auto xWm = dot(input, Wm_);
     if(CellType::layerNorm_)
-      xWm = layer_norm(xWm, gamma1m_);
+      xWm = layer_norm(xWm, gamma1m_, nullptr, CellType::layerNormEps_);
 
     xWs.push_back(xWm);
     return xWs;
@@ -670,7 +681,7 @@ public:
 
     auto sUm = affine(state.output, Um_, bm_);
     if(CellType::layerNorm_)
-      sUm = layer_norm(sUm, gamma2m_);
+      sUm = layer_norm(sUm, gamma2m_, nullptr, CellType::layerNormEps_);
 
     auto mstate = xWm * sUm;
 

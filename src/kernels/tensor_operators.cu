@@ -628,7 +628,7 @@ void ProdBatched(cublasHandle_t handle,
   cublasOperation_t opB = transB ? CUBLAS_OP_T : CUBLAS_OP_N;
 
 #if CUDA_VERSION >= 9000
-  //cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
+  cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
 #endif
   cublasSgemmStridedBatched(handle,
                             opB,
@@ -649,7 +649,7 @@ void ProdBatched(cublasHandle_t handle,
                             n * m,
                             std::max(batchA, batchB));
 #if CUDA_VERSION >= 9000
-  //cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
+  cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH);
 #endif
 }
 
@@ -1628,7 +1628,12 @@ __global__ void gLayerNormalizationGrad(float* gradX,
           grad_x -= sum_adj_x[0] * x_hat;
           grad_x /= (cols * sigma);
 
-          gradXRow[id] += gamma[id] * grad_x;
+          float final = gamma[id] * grad_x;
+
+          //final = final > 10 ? 10 : final;
+          //final = final < -10 ? -10 : final;
+
+          gradXRow[id] += final;
           atomicAdd(gradGamma + id, adjRow[id] * x_hat);
           if(beta) {
             atomicAdd(gradBeta + id, adjRow[id]);

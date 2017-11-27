@@ -249,6 +249,7 @@ public:
         "dec-cell-high-depth",
         "skip",
         "layer-normalization",
+        "layer-normalization-eps",
         "special-vocab",
         "tied-embeddings",
         "tied-embeddings-src",

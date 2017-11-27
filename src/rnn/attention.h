@@ -26,6 +26,7 @@ private:
   std::vector<Expr> contexts_;
   std::vector<Expr> alignments_;
   bool layerNorm_;
+  float layerNormEps_;
   float dropout_;
 
   Expr contextDropped_;
@@ -47,6 +48,8 @@ public:
     int dimDecState = options_->get<int>("dimState");
     dropout_ = options_->get<float>("dropout", 0);
     layerNorm_ = options_->get<bool>("layer-normalization", false);
+    layerNormEps_ = opt<float>("layer-normalization-eps", 1e-9);
+
     nematusNorm_ = options_->get<bool>("nematus-normalization", false);
     std::string prefix = options_->get<std::string>("prefix");
 
@@ -103,7 +106,7 @@ public:
                                    keywords::init = inits::from_value(1.0));
 
         mappedContext_
-            = layer_norm(dot(contextDropped_, Ua_), gammaContext_, ba_);
+            = layer_norm(dot(contextDropped_, Ua_), gammaContext_, ba_, layerNormEps_);
       }
 
     } else {
@@ -136,7 +139,7 @@ public:
         mappedState = layer_norm(
             mappedState, W_comb_att_lns_, W_comb_att_lnb_, NEMATUS_LN_EPS);
       else
-        mappedState = layer_norm(mappedState, gammaState_);
+        mappedState = layer_norm(mappedState, gammaState_, nullptr, layerNormEps_);
 
     auto attReduce = attOps(va_, mappedContext_, mappedState);
 
@@ -147,7 +150,7 @@ public:
 
     auto alignedSource
         = scalar_product(encState_->getAttended(), e, axis = -3);
-    
+
     contexts_.push_back(alignedSource);
     alignments_.push_back(e);
     return alignedSource;
