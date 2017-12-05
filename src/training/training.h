@@ -31,7 +31,8 @@ public:
       LOG(info)->info("[batching] Collecting statistics for dynamic batching");
       // @TODO, better fake batch with vocabulary
       auto model = New<Model>(options_);
-      THREAD_GUARD(stats = model->collectStats());
+      //THREAD_GUARD(stats = model->collectStats());
+      stats = model->collectStats();
       LOG(info)->info("[batching] Done");
     }
 

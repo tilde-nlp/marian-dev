@@ -296,8 +296,26 @@ public:
 
     auto nextState = step(graph, state);
 
-    auto cost = CrossEntropyCost(prefix_ + "cost")
-                  (nextState->getProbs(), trgIdx, mask = trgMask);
+    Expr cost;
+    if(options_->has("edit-alignment") && !inference_) {
+      int dimBatch = batch->size();
+      int trgWords = batch->back()->batchWidth();
+
+      auto diffs = graph->constant({dimBatch, 1, trgWords}, keywords::init=inits::from_vector(batch->getEditDiffs()));
+
+      auto ce = cross_entropy(nextState->getProbs(), trgIdx);
+      ce = diffs * ce;
+
+      if(trgMask)
+        ce = ce * trgMask;
+
+      cost = mean(sum(ce, keywords::axis = 2), keywords::axis = 0);
+    }
+    else {
+      cost = CrossEntropyCost(prefix_ + "cost")
+               (nextState->getProbs(), trgIdx, mask = trgMask);
+
+    }
 
     if(options_->has("guided-alignment") && !inference_) {
       auto alignments = decoder_->getAlignments();
@@ -328,7 +346,10 @@ public:
       bool fits = true;
       do {
         auto batch = data::CorpusBatch::fakeBatch(
-            lengths, batchSize, options_->has("guided-alignment"));
+            lengths, 
+            batchSize, 
+            options_->has("guided-alignment"), 
+            options_->has("edit-alignment"));
         build(graph, batch);
         fits = graph->fits();
         if(fits)

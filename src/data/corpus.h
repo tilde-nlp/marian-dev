@@ -78,6 +78,7 @@ private:
   std::vector<Ptr<SubBatch>> batches_;
   std::vector<size_t> sentenceIds_;
   std::vector<float> guidedAlignment_;
+  std::vector<float> editDiffs_;
 
 public:
   CorpusBatch(const std::vector<Ptr<SubBatch>>& batches) : batches_(batches) {}
@@ -117,7 +118,8 @@ public:
 
   static Ptr<CorpusBatch> fakeBatch(std::vector<size_t>& lengths,
                                     size_t batchSize,
-                                    bool guidedAlignment = false) {
+                                    bool guidedAlignment = false,
+                                    bool editAlignment = false) {
     std::vector<Ptr<SubBatch>> batches;
 
     for(auto len : lengths) {
@@ -132,6 +134,10 @@ public:
                                 0.f);
       batch->setGuidedAlignment(guided);
     }
+    if(editAlignment) {
+      std::vector<float> edits(batchSize * lengths.back(), 0.f);
+      batch->setEditDiffs(edits);
+    }
 
     return batch;
   }
@@ -140,6 +146,12 @@ public:
 
   void setGuidedAlignment(const std::vector<float>& aln) {
     guidedAlignment_ = aln;
+  }
+
+  std::vector<float>& getEditDiffs() { return editDiffs_; }
+
+  void setEditDiffs(const std::vector<float>& editDiffs) {
+    editDiffs_ = editDiffs;
   }
 };
 
@@ -185,10 +197,11 @@ public:
 
     while(std::getline((std::istream&)aStream, line)) {
       data_.emplace_back();
-      std::vector<std::string> atok = split(line, " -");
-      ;
-      for(size_t i = 0; i < atok.size(); i += 2)
-        data_.back().emplace_back(std::stoi(atok[i]), std::stoi(atok[i + 1]));
+      if(!line.empty()) {
+        std::vector<std::string> atok = split(line, " -");
+        for(size_t i = 0; i < atok.size(); i += 2)
+          data_.back().emplace_back(std::stoi(atok[i]), std::stoi(atok[i + 1]));
+      }
       c++;
     }
 
@@ -220,6 +233,32 @@ public:
       }
     }
     batch->setGuidedAlignment(guided);
+  }
+
+  void editDiffs(Ptr<CorpusBatch> batch, float weight = 1.0) {
+    int srcWords = batch->front()->batchWidth();
+    int trgWords = batch->back()->batchWidth();
+
+    int dimBatch = batch->getSentenceIds().size();
+    std::vector<float> edits(dimBatch * trgWords, weight);
+
+    for(int b = 0; b < dimBatch; ++b) {
+      auto& alignment = data_[batch->getSentenceIds()[b]];
+      for(auto& p : alignment) {
+        int sid, tid;
+        std::tie(sid, tid) = p;
+
+        size_t idx1 = b + sid * dimBatch;
+        size_t idx2 = b + tid * dimBatch;
+
+        if(batch->front()->indices()[idx1] == batch->back()->indices()[idx2])
+          edits[idx2] = 1.0;
+      }
+    }
+    for(int i = 0; i < batch->back()->indices().size(); ++i)
+      if(batch->back()->indices()[i] == 0)
+        edits[i] = 1.0;
+    batch->setEditDiffs(edits);
   }
 };
 
@@ -309,13 +348,21 @@ public:
 
     if(options_->has("guided-alignment") && wordAlignment_)
       wordAlignment_->guidedAlignment(batch);
+    if(options_->has("edit-alignment") && wordAlignment_)
+      wordAlignment_->editDiffs(batch, options_->get<float>("edit-alignment-weight"));
 
     return batch;
   }
 
   void prepare() {
+    UTIL_THROW_IF2(options_->has("guided-alignment") && options_->has("edit-alignment"), 
+                  "guided-alignment and edit-alignment cannot be used together at this point");
+
     if(options_->has("guided-alignment"))
       setWordAlignment(options_->get<std::string>("guided-alignment"));
+
+    if(options_->has("edit-alignment"))
+      setWordAlignment(options_->get<std::string>("edit-alignment"));
   }
 
 private:
