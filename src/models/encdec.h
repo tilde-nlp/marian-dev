@@ -357,7 +357,7 @@ public:
     else {
       std::string costType = opt<std::string>("cost-type");
       float ls = inference_ ? 0.f : opt<float>("label-smoothing");
-      auto cost = Cost(nextState->getProbs(), trgIdx, trgMask, costType, ls);
+      cost = Cost(nextState->getProbs(), trgIdx, trgMask, costType, ls);
     }
 
     if(options_->has("guided-alignment") && !inference_) {
@@ -394,9 +394,9 @@ public:
       bool fits = true;
       do {
         auto batch = data::CorpusBatch::fakeBatch(
-            lengths, 
-            batchSize, 
-            options_->has("guided-alignment"), 
+            lengths,
+            batchSize,
+            options_->has("guided-alignment"),
             options_->has("edit-alignment"));
         build(graph, batch);
         fits = graph->fits();
