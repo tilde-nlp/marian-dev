@@ -373,14 +373,14 @@ public:
     int wid = gen() * (dimWords - 1);
     int i = wid * dimBatch + sid;
 
-    while(words[i] == 0) {
-      wid = gen() * (dimWords - 1);
-      i = wid * dimBatch + sid;
-    }
+    //while(words[i] == 0) {
+    //  wid = gen() * (dimWords - 1);
+    //  i = wid * dimBatch + sid;
+    //}
 
     int j = gen() * (words.size() - 1);
-    while(words[j] == 0 || i == j)
-      j = gen() * (words.size() - 1);
+    //while(words[j] == 0 || i == j)
+    //  j = gen() * (words.size() - 1);
 
     words[i] = words[j];
   }
@@ -390,10 +390,10 @@ public:
     int wid = gen() * (dimWords - 1);
     int i = wid * dimBatch + sid;
 
-    while(words[i] == 0) {
-      wid = gen() * (dimWords - 1);
-      i = wid * dimBatch + sid;
-    }
+    //while(words[i] == 0) {
+    //  wid = gen() * (dimWords - 1);
+    //  i = wid * dimBatch + sid;
+    //}
 
     for(int w = wid + 1; w < dimWords; ++w) {
       int j = w * dimBatch + sid;
@@ -407,10 +407,10 @@ public:
     int wid = gen() * (dimWords - 1);
     int i = wid * dimBatch + sid;
 
-    while(words[i] == 0) {
-      wid = gen() * (dimWords - 1);
-      i = wid * dimBatch + sid;
-    }
+    //while(words[i] == 0) {
+    //  wid = gen() * (dimWords - 1);
+    //  i = wid * dimBatch + sid;
+    //}
 
     for(int w = dimWords - 1; w > wid ; --w) {
       int j = w * dimBatch + sid;
@@ -419,8 +419,8 @@ public:
     }
 
     int j = gen() * (words.size() - 1);
-    while(words[j] == 0 || i == j)
-      j = gen() * (words.size() - 1);
+    //while(words[j] == 0 || i == j)
+    //  j = gen() * (words.size() - 1);
 
     words[i] = words[j];
   }
@@ -430,10 +430,10 @@ public:
     int wid = gen() * (dimWords - 1);
     int i = wid * dimBatch + sid;
 
-    while(words[i] == 0) {
-      wid = gen() * (dimWords - 1);
-      i = wid * dimBatch + sid;
-    }
+    //while(words[i] == 0) {
+    //  wid = gen() * (dimWords - 1);
+    //  i = wid * dimBatch + sid;
+    //}
 
     int j = (wid + 1) * dimBatch + sid;
 
