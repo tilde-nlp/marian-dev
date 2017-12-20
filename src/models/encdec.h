@@ -400,7 +400,9 @@ public:
       bool fits = true;
       do {
         auto batch = data::CorpusBatch::fakeBatch(
-            lengths, batchSize, options_->has("guided-alignment"));
+            lengths, batchSize,
+            options_->has("guided-alignment"),
+            options_->get<float>("edit-weight") > 1);
         build(graph, batch);
         fits = graph->fits();
         if(fits)
