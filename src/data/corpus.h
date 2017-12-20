@@ -108,6 +108,7 @@ class CorpusBatch : public Batch {
 private:
   std::vector<Ptr<SubBatch>> batches_;
   std::vector<float> guidedAlignment_;
+  std::vector<float> editDiffs_;
 
 public:
   CorpusBatch(const std::vector<Ptr<SubBatch>>& batches) : batches_(batches) {}
@@ -176,7 +177,8 @@ public:
 
   static Ptr<CorpusBatch> fakeBatch(std::vector<size_t>& lengths,
                                     size_t batchSize,
-                                    bool guidedAlignment = false) {
+                                    bool guidedAlignment = false,
+                                    bool editAlignment = false) {
     std::vector<Ptr<SubBatch>> batches;
 
     for(auto len : lengths) {
@@ -193,6 +195,10 @@ public:
                                 0.f);
       batch->setGuidedAlignment(guided);
     }
+    if(editAlignment) {
+      std::vector<float> edits(batchSize * lengths.back(), 0.f);
+      batch->setEditDiffs(edits);
+    }
 
     return batch;
   }
@@ -201,6 +207,12 @@ public:
 
   void setGuidedAlignment(const std::vector<float>& aln) {
     guidedAlignment_ = aln;
+  }
+
+  std::vector<float>& getEditDiffs() { return editDiffs_; }
+
+  void setEditDiffs(const std::vector<float>& editDiffs) {
+    editDiffs_ = editDiffs;
   }
 };
 
@@ -246,9 +258,11 @@ public:
 
     while(std::getline((std::istream&)aStream, line)) {
       data_.emplace_back();
-      std::vector<std::string> atok = split(line, " -");
-      for(size_t i = 0; i < atok.size(); i += 2)
-        data_.back().emplace_back(std::stoi(atok[i]), std::stoi(atok[i + 1]));
+      if(!line.empty()) {
+        std::vector<std::string> atok = split(line, " -");
+        for(size_t i = 0; i < atok.size(); i += 2)
+          data_.back().emplace_back(std::stoi(atok[i]), std::stoi(atok[i + 1]));
+      }
       c++;
     }
 
@@ -330,6 +344,172 @@ public:
 
   std::vector<Ptr<Vocab>>& getVocabs() { return vocabs_; }
 
+  void editDiffs(Ptr<CorpusBatch> batch, float weight = 1.0) {
+    int dimBatch = batch->getSentenceIds().size();
+    int trgWords = batch->back()->batchWidth();
+    std::vector<float> edits(dimBatch * trgWords, 1.0);
+
+    for(int i = 0; i < batch->back()->indices().size(); ++i)
+      if(batch->front()->indices()[i] != batch->back()->indices()[i])
+        edits[i] = weight;
+
+    batch->setEditDiffs(edits);
+  }
+
+
+  //template <class Distribution>
+  //void distribution(std::vector<float>& vals, float a, float b) {
+  //  std::default_random_engine engine(Config::seed++);
+  //  Distribution dist(a, b);
+  //  auto gen = std::bind(dist, engine);
+  //  std::generate(begin(vals), end(vals), gen);
+  //}
+
+  //distribution<std::normal_distribution<float>>(t, 0, scale);
+  //distribution<std::uniform_real_distribution<float>>(t, -scale, scale);
+
+  template <class Gen>
+  void sub(std::vector<Word>& words, int sid, int dimBatch, int dimWords, Gen gen) {
+    int wid = gen() * (dimWords - 1);
+    int i = wid * dimBatch + sid;
+
+    while(words[i] == 0) {
+      wid = gen() * (dimWords - 1);
+      i = wid * dimBatch + sid;
+    }
+
+    int j = gen() * (words.size() - 1);
+    while(words[j] == 0 || i == j)
+      j = gen() * (words.size() - 1);
+
+    words[i] = words[j];
+  }
+
+  template <class Gen>
+  void del(std::vector<Word>& words, int sid, int dimBatch, int dimWords, Gen gen) {
+    int wid = gen() * (dimWords - 1);
+    int i = wid * dimBatch + sid;
+
+    while(words[i] == 0) {
+      wid = gen() * (dimWords - 1);
+      i = wid * dimBatch + sid;
+    }
+
+    for(int w = wid + 1; w < dimWords; ++w) {
+      int j = w * dimBatch + sid;
+      words[i] = words[j];
+      i = j;
+    }
+  }
+
+  template <class Gen>
+  void ins(std::vector<Word>& words, int sid, int dimBatch, int dimWords, Gen gen) {
+    int wid = gen() * (dimWords - 1);
+    int i = wid * dimBatch + sid;
+
+    while(words[i] == 0) {
+      wid = gen() * (dimWords - 1);
+      i = wid * dimBatch + sid;
+    }
+
+    for(int w = dimWords - 1; w > wid ; --w) {
+      int j = w * dimBatch + sid;
+      int k = (w - 1) * dimBatch + sid;
+      words[j] = words[k];
+    }
+
+    int j = gen() * (words.size() - 1);
+    while(words[j] == 0 || i == j)
+      j = gen() * (words.size() - 1);
+
+    words[i] = words[j];
+  }
+
+  template <class Gen>
+  void swp(std::vector<Word>& words, int sid, int dimBatch, int dimWords, Gen gen) {
+    int wid = gen() * (dimWords - 1);
+    int i = wid * dimBatch + sid;
+
+    while(words[i] == 0) {
+      wid = gen() * (dimWords - 1);
+      i = wid * dimBatch + sid;
+    }
+
+    int j = (wid + 1) * dimBatch + sid;
+
+    if(j < words.size() && words[j] != 0) {
+      Word temp = words[i];
+      words[i] = words[j];
+      words[j] = temp;
+    }
+  }
+
+  template <class Gen>
+  void corruptSent(std::vector<Word>& words, int sid,
+                   int dimBatch, int dimWords,
+                   int actions, Gen gen) {
+    float subProb = 0.5;
+    float delProb = 0.166;
+    float insProb = 0.166;
+    float swpProb = 0.166;
+
+    int total = 100;
+    std::vector<int> wheel;
+    for(int i = 0; i < total * subProb; i++)
+      wheel.push_back(0);
+    for(int i = 0; i < total * delProb; i++)
+      wheel.push_back(1);
+    for(int i = 0; i < total * insProb; i++)
+      wheel.push_back(2);
+    for(int i = 0; i < total * swpProb; i++)
+      wheel.push_back(3);
+
+    for(int i = 0; i < actions; i++) {
+      float p = gen();
+      int act = wheel[p * (wheel.size() - 1)];
+      switch (act) {
+        case 0: sub(words, sid, dimBatch, dimWords, gen); break;
+        case 1: del(words, sid, dimBatch, dimWords, gen); break;
+        case 2: ins(words, sid, dimBatch, dimWords, gen); break;
+        case 3: swp(words, sid, dimBatch, dimWords, gen); break;
+        default: break;
+      }
+    }
+  }
+
+  void corrupt(Ptr<CorpusBatch> batch) {
+    float senProb = 0.6;
+    float errProb = 0.2;
+
+    int dimBatch = batch->getSentenceIds().size();
+    int srcWords = batch->front()->batchWidth();
+
+    std::vector<Word>& words = batch->front()->indices();
+
+    std::default_random_engine engine(Config::seed++);
+
+    std::normal_distribution<float> distNormal(errProb / senProb, 0.2);
+    std::uniform_real_distribution<float> distUniform(0.0, 1.0);
+
+    auto genNormal = std::bind(distNormal, engine);
+    auto genUniform = std::bind(distUniform, engine);
+
+    std::vector<float> senProbs(dimBatch);
+    std::vector<float> errProbs(dimBatch);
+
+    std::generate(std::begin(senProbs), std::end(senProbs), genUniform);
+    std::generate(std::begin(errProbs), std::end(errProbs), genNormal);
+
+    for(int sid = 0; sid < dimBatch; sid++) {
+      if(senProbs[sid] < 0.6) {
+        corruptSent(words, sid,
+                    dimBatch, srcWords,
+                    srcWords * fabs(errProbs[sid]),
+                    genUniform);
+      }
+    }
+  }
+
   batch_ptr toBatch(const std::vector<sample>& batchVector) {
     int batchSize = batchVector.size();
 
@@ -368,8 +548,14 @@ public:
     auto batch = batch_ptr(new batch_type(subBatches));
     batch->setSentenceIds(sentenceIds);
 
+    if(options_->get<bool>("edit-corrupt"))
+      corrupt(batch);
+
     if(options_->has("guided-alignment") && wordAlignment_)
       wordAlignment_->guidedAlignment(batch);
+
+    if(options_->has("edit-weight"))
+      editDiffs(batch, options_->get<float>("edit-weight"));
 
     return batch;
   }

@@ -341,10 +341,30 @@ public:
 
     auto nextState = step(graph, state);
 
-    std::string costType = opt<std::string>("cost-type");
-    float ls = inference_ ? 0.f : opt<float>("label-smoothing");
+    Expr cost;
+    if(opt<double>("edit-weight") > 1 && !inference_) {
+      int dimBatch = batch->size();
+      int trgWords = batch->back()->batchWidth();
 
-    auto cost = Cost(nextState->getProbs(), trgIdx, trgMask, costType, ls);
+      //batch->debug();
+
+      auto diffs = graph->constant({trgWords, dimBatch, 1},
+                                   keywords::init=inits::from_vector(batch->getEditDiffs()));
+      //debug(transpose(diffs, {2, 1, 0}));
+
+      auto ce = cross_entropy(nextState->getProbs(), trgIdx);
+      ce = diffs * ce;
+
+      if(trgMask)
+        ce = ce * trgMask;
+
+      cost = mean(sum(ce, keywords::axis = -3), keywords::axis = -2);
+    }
+    else {
+      std::string costType = opt<std::string>("cost-type");
+      float ls = inference_ ? 0.f : opt<float>("label-smoothing");
+      cost = Cost(nextState->getProbs(), trgIdx, trgMask, costType, ls);
+    }
 
     if(options_->has("guided-alignment") && !inference_) {
       auto alignments = decoders_[0]->getAlignments();
