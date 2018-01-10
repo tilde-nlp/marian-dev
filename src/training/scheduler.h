@@ -24,6 +24,40 @@ private:
 
   boost::timer::cpu_timer timer;
 
+  // Eve helpers
+  float eve_f1{0};
+  float eve_f2{0};
+  float eve_d{1};
+  
+  float eveFactor(const TrainingState& state, float k, float K, float beta) {
+    if(state.batches > 1) {
+      float dmin, dmax;
+      if(state.cost >= eve_f2) {
+        dmin = k + 1;
+        dmax = K + 1;
+      }
+      else {
+        dmin = 1.f / (K + 1);
+        dmax = 1.f / (k + 1);
+      }
+      
+      float c = std::min(std::max(dmin, state.cost / eve_f2), dmax);
+      eve_f1 = c * eve_f2;
+      
+      float r = std::abs(eve_f1 - eve_f2) / std::min(eve_f1, eve_f2);
+      eve_f2 = eve_f1;
+      
+      eve_d = beta * eve_d + (1 - beta) * r;
+    }
+    else {
+      eve_f1 = state.cost;
+      eve_f2 = state.cost;
+      eve_d = 1;
+    }
+    
+    return eve_d;
+  }
+
 public:
   Scheduler(Ptr<Config> options, Ptr<TrainingState> state)
       : options_(options), state_(state) {}
@@ -118,6 +152,7 @@ public:
     samplesDisp += batch->size();
     wordsDisp += batch->words();
     state_->newBatch();
+    state_->cost = cost;
 
     if(state_->batches % options_->get<size_t>("disp-freq") == 0) {
       if(options_->get<bool>("lr-report")) {
@@ -191,8 +226,17 @@ public:
       mult2 = std::min(
           1.f, (float)(std::sqrt(decayGoogle) / std::sqrt(state.batches)));
     }
+    
+    float mult3 = 1.f;
+    if(options_->has("lr-decay-eve")) {
+      auto eveParams = options_->get<std::vector<float>>("lr-decay-eve");
+      
+      ABORT_IF(eveParams.size() != 3, "Eve requires three parameters: k K beta");
+      
+      mult3 = eveFactor(state, eveParams[0], eveParams[1], eveParams[2]);
+    }
 
-    baselr = baselr * mult1 * mult2;
+    baselr = baselr * mult1 * mult2 * mult3;
 
     float lrStart = options_->get<float>("lr-warmup-start-rate");
     if(lrStart > 0)

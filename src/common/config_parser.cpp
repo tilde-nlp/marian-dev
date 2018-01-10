@@ -414,6 +414,9 @@ void ConfigParser::addOptionsTraining(po::options_description& desc) {
      "Repeat learning rate warmup when learning rate is decayed")
     ("lr-decay-inv-sqrt", po::value<size_t>()->default_value(0),
      "Decrease learning rate at arg / sqrt(no. updates) starting at arg")
+    ("lr-decay-eve",  po::value<std::vector<float>>()->multitoken()
+     ->implicit_value(std::vector<float>({0.1f, 10.f, 0.999f}), "0.1 10.0 0.999"),
+     "Parameters for Eve learning rate schedule, k K beta")
 
     ("lr-warmup", po::value<size_t>()->default_value(0),
      "Increase learning rate linearly for arg first steps")
@@ -761,6 +764,7 @@ void ConfigParser::parseOptions(int argc, char** argv, bool doValidate) {
     SET_OPTION("lr-warmup", size_t);
 
     SET_OPTION("lr-decay-inv-sqrt", size_t);
+    SET_OPTION_NONDEFAULT("lr-decay-eve", std::vector<float>);
     SET_OPTION("lr-warmup-start-rate", float);
     SET_OPTION("lr-warmup-cycle", bool);
 
