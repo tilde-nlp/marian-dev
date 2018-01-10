@@ -25,14 +25,16 @@ private:
   boost::timer::cpu_timer timer;
 
   // Eve helpers
-  float eve_f1{0};
-  float eve_f2{0};
-  float eve_d{1};
+  float eve_fp{0};
+  float eve_dp{1};
   
   float eveFactor(const TrainingState& state, float k, float K, float beta) {
-    if(state.batches > 1) {
+    float fc = state.cost;
+    float eve_fc = 0;
+    
+    if(eve_fp) {
       float dmin, dmax;
-      if(state.cost >= eve_f2) {
+      if(fc >= eve_fp) {
         dmin = k + 1;
         dmax = K + 1;
       }
@@ -41,21 +43,19 @@ private:
         dmax = 1.f / (k + 1);
       }
       
-      float c = std::min(std::max(dmin, state.cost / eve_f2), dmax);
-      eve_f1 = c * eve_f2;
+      float c = std::min(std::max(dmin, fc / eve_fp), dmax);
+      eve_fc = c * eve_fp;
       
-      float r = std::abs(eve_f1 - eve_f2) / std::min(eve_f1, eve_f2);
-      eve_f2 = eve_f1;
-      
-      eve_d = beta * eve_d + (1 - beta) * r;
+      float r = std::fabs(eve_fc - eve_fp) / std::min(eve_fc, eve_fp);
+      eve_dp = beta * eve_dp + (1 - beta) * r;
     }
     else {
-      eve_f1 = state.cost;
-      eve_f2 = state.cost;
-      eve_d = 1;
+      eve_fc = fc;
+      eve_dp = 1.f;
     }
     
-    return eve_d;
+    eve_fp = eve_fc;
+    return 1.f / eve_dp;
   }
 
 public:
