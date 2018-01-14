@@ -211,9 +211,8 @@ private:
 
           auto encState = state->getEncoderStates()[k];
 
-          baseCell.push_back(rnn::attention(graph)  //
-                             ("prefix", attPrefix)  //
-                                 .set_state(encState));
+          baseCell.push_back(
+              rnn::attention(graph)("prefix", attPrefix).set_state(encState));
         }
       }
     }

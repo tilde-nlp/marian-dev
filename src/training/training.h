@@ -26,7 +26,6 @@ public:
     Ptr<BatchStats> stats;
     if(options_->get<bool>("mini-batch-fit")) {
       LOG(info, "[batching] Collecting statistics for batch fitting");
-
       // @TODO, better fake batch with vocabulary
       auto model = New<ModelWrapper>(options_);
       //THREAD_GUARD(stats = model->collectStats());

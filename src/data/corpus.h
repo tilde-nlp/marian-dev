@@ -332,6 +332,7 @@ private:
   std::vector<Ptr<Vocab>> vocabs_;
   size_t maxLength_;
   bool maxLengthCrop_;
+  bool rightLeft_;
 
   std::mt19937 g_;
   std::vector<size_t> ids_;
