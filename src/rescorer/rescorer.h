@@ -88,6 +88,10 @@ public:
 
     size_t batchId = 0;
 
+    Ptr<Vocab> trgVocab;
+    if(options_->has("n-best-output"))
+      trgVocab = corpus_->getVocabs().back();
+
     std::mutex smutex;
     ThreadPool pool(graphs_.size(), graphs_.size());
 
@@ -120,9 +124,14 @@ public:
         if(!summarize) {
           for(size_t i = 0; i < batch->size(); ++i) {
             if(options_->has("n-best-output")) {
+
+              auto trgWords = batch->back()->getWords(i);
+              std::string trgSentence = Join((*trgVocab)(trgWords), " ");
+
+              // @TODO: feature name might be passed to ScoreCollector
               output->WriteNBest(batch->getSentenceIds()[i],
                                  scores[i],
-                                 "trg",
+                                 trgSentence,
                                  options_->get<std::string>("n-best-output"));
             } else {
               output->Write(batch->getSentenceIds()[i], scores[i]);
