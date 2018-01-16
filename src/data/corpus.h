@@ -46,6 +46,9 @@ public:
   size_t getId() const { return id_; }
 };
 
+/**
+ * @brief Batch of sentences represented as word indices with masking.
+ */
 class SubBatch {
 private:
   std::vector<Word> indices_;
@@ -56,6 +59,12 @@ private:
   size_t words_;
 
 public:
+  /**
+   * @brief Creates an empty subbatch of specified size.
+   *
+   * @param size Number of sentences
+   * @param width Number of words in the longest sentence
+   */
   SubBatch(int size, int width)
       : indices_(size * width, 0),
         mask_(size * width, 0),
@@ -63,12 +72,53 @@ public:
         width_(width),
         words_(0) {}
 
+  /**
+   * @brief Flat vector of word indices.
+   *
+   * The order of indices is \f$idx_{0,0}, idx_{0,1},\dots,idx_{0,s}, \dots,
+   * idx_{w,0},idx_{w,1},\dots,idx_{w,s}\f$, where \f$w\f$ is the number of
+   * words (width) and \f$s\f$ is the number of sentences (size).
+   */
   std::vector<Word>& indices() { return indices_; }
+  /**
+   * @brief Flat masking vector; 0 is used for masked words.
+   *
+   * @see indices()
+   */
   std::vector<float>& mask() { return mask_; }
 
+  /**
+   * @brief The number of sentences in the batch.
+   */
   size_t batchSize() { return size_; }
+  /**
+   * @brief The number of words in the longest sentence in the batch.
+   */
   size_t batchWidth() { return width_; };
+  /**
+   * @brief The total number of words in the batch, including masking.
+   */
   size_t batchWords() { return words_; }
+
+  void setWords(size_t words) { words_ = words; }
+
+  /**
+   * @brief Returns the word vector for a given sentence without masking.
+   */
+  std::vector<Word> getWords(size_t idx) {
+    ABORT_IF(idx >= size_, "No sentence with index {} in the subbatch", idx);
+
+    if(size_ == 1)
+      return indices();
+
+    std::vector<Word> words(width_);
+    for(size_t i = idx; i < indices_.size(); i += size_) {
+      if(!mask_[i])
+        break;
+      words.push_back(indices_[i]);
+    }
+    return words;
+  }
 
   std::vector<Ptr<SubBatch>> split(size_t n) {
     std::vector<Ptr<SubBatch>> splits;
@@ -100,8 +150,6 @@ public:
     }
     return splits;
   }
-
-  void setWords(size_t words) { words_ = words; }
 };
 
 class CorpusBatch : public Batch {
@@ -119,10 +167,10 @@ public:
   Ptr<SubBatch> back() { return batches_.back(); }
 
   void debug() {
-    std::cerr << "batches: " << sets() << std::endl;
+    std::cerr << "batch sets: " << sets() << std::endl;
 
     if(!sentenceIds_.empty()) {
-      std::cerr << "indexes: ";
+      std::cerr << "sentence indices: ";
       for(auto id : sentenceIds_)
         std::cerr << id << " ";
       std::cerr << std::endl;
@@ -130,9 +178,9 @@ public:
 
     size_t b = 0;
     for(auto sb : batches_) {
-      std::cerr << "batch " << b++ << ": " << std::endl;
+      std::cerr << "batch (" << b++ << "): " << std::endl;
       for(size_t i = 0; i < sb->batchWidth(); i++) {
-        std::cerr << "\t w: ";
+        std::cerr << "\t w(" << i << "): ";
         for(size_t j = 0; j < sb->batchSize(); j++) {
           Word w = sb->indices()[i * sb->batchSize() + j];
           std::cerr << w << " ";
