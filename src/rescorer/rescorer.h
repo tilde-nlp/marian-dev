@@ -40,8 +40,7 @@ private:
 
 public:
   Rescore(Ptr<Config> options)
-      : options_(options),
-        corpus_(New<Corpus>(options_)) {
+      : options_(options), corpus_(New<Corpus>(options_)) {
     corpus_->prepare();
 
     auto devices = options_->get<std::vector<size_t>>("devices");
@@ -53,7 +52,7 @@ public:
     }
 
     auto modelFile = options_->get<std::string>("model");
-    
+
     Ptr<Options> temp = New<Options>();
     temp->merge(options);
     temp->set("inference", true);
@@ -62,12 +61,12 @@ public:
     models_.resize(graphs_.size());
     ThreadPool pool(graphs_.size(), graphs_.size());
     for(int i = 0; i < graphs_.size(); ++i) {
-
-      pool.enqueue([=](int j) {
-        models_[j] = New<Model>(temp);
-        models_[j]->load(graphs_[j], modelFile);
-      }, i);
-
+      pool.enqueue(
+          [=](int j) {
+            models_[j] = New<Model>(temp);
+            models_[j]->load(graphs_[j], modelFile);
+          },
+          i);
     }
   }
 
@@ -120,7 +119,14 @@ public:
 
         if(!summarize) {
           for(size_t i = 0; i < batch->size(); ++i) {
-            output->Write(batch->getSentenceIds()[i], scores[i]);
+            if(options_->has("n-best-output")) {
+              output->WriteNBest(batch->getSentenceIds()[i],
+                                 scores[i],
+                                 "trg",
+                                 options_->get<std::string>("n-best-output"));
+            } else {
+              output->Write(batch->getSentenceIds()[i], scores[i]);
+            }
           }
         }
       };

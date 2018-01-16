@@ -601,6 +601,8 @@ void ConfigParser::addOptionsRescore(po::options_description& desc) {
       "Do not load existing model specified in --model arg")
     ("train-sets,t", po::value<std::vector<std::string>>()->multitoken(),
       "Paths to corpora to be scored: source target")
+    ("n-best-output", po::value<std::string>(),
+      "Output n-best list using  arg  as feature name")
     ("vocabs,v", po::value<std::vector<std::string>>()->multitoken(),
       "Paths to vocabulary files have to correspond to --train-sets. "
       "If this parameter is not supplied we look for vocabulary files "
@@ -824,6 +826,7 @@ void ConfigParser::parseOptions(int argc, char** argv, bool doValidate) {
     SET_OPTION("mini-batch-words", int);
     SET_OPTION("mini-batch-fit", bool);
     SET_OPTION_NONDEFAULT("summary", std::string);
+    SET_OPTION_NONDEFAULT("n-best-output", std::string);
   }
   if(mode_ == ConfigMode::translating) {
     SET_OPTION("input", std::vector<std::string>);
