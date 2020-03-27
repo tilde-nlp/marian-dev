@@ -244,6 +244,7 @@ public:
   }
 
   void backward(bool zero = true) {
+    clearNonTrainableTopNodes();
     if(topNodes_.size() > 1) {
       LOG(critical, "There are more ({}) than one top most node for backward step:", topNodes_.size());
       for(auto node : topNodes_) {
@@ -424,6 +425,15 @@ public:
         topNodes_.erase(child); // this child is consumed and therefore not a root
 
       return node;
+    }
+  }
+
+  void clearNonTrainableTopNodes() {
+    for(auto it = topNodes_.begin(); it != topNodes_.end();) {
+      if(!(*it)->trainable())
+        topNodes_.erase(it++);
+      else
+        it++;
     }
   }
 
