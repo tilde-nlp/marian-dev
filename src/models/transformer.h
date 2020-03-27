@@ -219,8 +219,11 @@ public:
     // for translation only the last one. Also split alignments by target words.
     // @TODO: make splitting obsolete
     alignments_.clear();
+    bool trainAlignments = options_->get("guided-alignment", std::string("none")) != "none";
     for(int i = 0; i < trgWords; ++i) {
-      alignments_.push_back(slice(head0, -1, i)); // [tgt index][-4: beam depth, -3: max src length, -2: batch size, -1: 1]
+      auto node = slice(head0, -1, i);
+      node->setTrainable(trainAlignments);
+      alignments_.push_back(node); // [tgt index][-4: beam depth, -3: max src length, -2: batch size, -1: 1]
     }
   }
 
